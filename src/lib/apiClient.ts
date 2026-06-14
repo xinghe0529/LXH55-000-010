@@ -10,6 +10,7 @@ import type {
   VoteOption,
   ProgressNodeStatus,
   ConstructionDailyReport,
+  Notification,
 } from '../../shared/types';
 
 type ApiResponse<T> = { success: true; data: T } | { success: false; error: string };
@@ -110,6 +111,24 @@ export const api = {
     put<ConstructionDailyReport>(`/api/proposals/${proposalId}/daily-reports/${reportId}`, data),
   deleteDailyReport: (proposalId: string, reportId: string) =>
     del<{ message: string }>(`/api/proposals/${proposalId}/daily-reports/${reportId}`),
+  getNotifications: (householdId: string, params?: { proposalId?: string; unreadOnly?: boolean; limit?: number }) => {
+    const q = new URLSearchParams();
+    q.set('householdId', householdId);
+    if (params?.proposalId) q.set('proposalId', params.proposalId);
+    if (params?.unreadOnly) q.set('unreadOnly', 'true');
+    if (params?.limit) q.set('limit', String(params.limit));
+    return get<Notification[]>(`/api/notifications?${q.toString()}`);
+  },
+  getUnreadCount: (householdId: string, proposalId?: string) => {
+    const q = new URLSearchParams();
+    q.set('householdId', householdId);
+    if (proposalId) q.set('proposalId', proposalId);
+    return get<{ count: number }>(`/api/notifications/unread-count?${q.toString()}`);
+  },
+  markNotificationRead: (notificationId: string, householdId: string) =>
+    post<{ message: string }>(`/api/notifications/${notificationId}/read`, { householdId }),
+  markAllNotificationsRead: (householdId: string, proposalId?: string) =>
+    post<{ count: number; message: string }>('/api/notifications/read-all', { householdId, proposalId }),
 };
 
 export default api;

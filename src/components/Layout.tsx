@@ -1,7 +1,8 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { Building2, Vote, Gauge, Plus, Bell, Search, X, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { Building2, Vote, Gauge, Plus, Search, X, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { useUIStore } from '../store/ui';
 import { cn } from '../lib/utils';
+import { NotificationPanel } from './NotificationPanel';
 
 function Toast() {
   const toast = useUIStore((s) => s.toast);
@@ -60,10 +61,7 @@ export default function Layout() {
             <button className="btn-ghost hidden lg:inline-flex">
               <Search className="w-4 h-4" />
             </button>
-            <button className="btn-ghost relative">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-accent-500 ring-2 ring-white" />
-            </button>
+            <NotificationPanel />
             <button
               onClick={() => useUIStore.getState().setNewProposalModal(true)}
               className="btn-accent"

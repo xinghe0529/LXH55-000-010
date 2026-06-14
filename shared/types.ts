@@ -169,3 +169,35 @@ export interface ConstructionDailyReport {
 }
 
 export const WEATHER_OPTIONS = ['晴', '多云', '阴', '小雨', '中雨', '大雨', '雷阵雨', '小雪', '中雪', '大雪', '雾', '霾'];
+
+export type NotificationType = 'vote_result' | 'progress_node' | 'payment_reminder' | 'system';
+
+export type NotificationPriority = 'low' | 'medium' | 'high';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  priority: NotificationPriority;
+  recipientType: 'all' | 'household';
+  recipientIds: string[];
+  proposalId: string;
+  title: string;
+  content: string;
+  relatedId?: string;
+  data?: Record<string, unknown>;
+  createdAt: string;
+  readBy: string[];
+}
+
+export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
+  vote_result: '投票结果',
+  progress_node: '施工进度',
+  payment_reminder: '资金催缴',
+  system: '系统通知',
+};
+
+export const NOTIFICATION_PRIORITY_COLORS: Record<NotificationPriority, string> = {
+  low: 'bg-blue-100 text-blue-700',
+  medium: 'bg-yellow-100 text-yellow-700',
+  high: 'bg-red-100 text-red-700',
+};

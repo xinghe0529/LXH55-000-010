@@ -6,6 +6,9 @@ import type {
   ProgressNode,
   FinanceRecord,
   ConstructionDailyReport,
+  Notification,
+  NotificationType,
+  NotificationPriority,
 } from '../../shared/types.js';
 import {
   generateHouseholds,
@@ -23,6 +26,7 @@ class DataStore {
   private progressNodes: Map<string, ProgressNode[]> = new Map();
   private financeRecords: Map<string, FinanceRecord[]> = new Map();
   private dailyReports: Map<string, ConstructionDailyReport[]> = new Map();
+  private notifications: Notification[] = [];
 
   constructor() {
     this.seedMockData();
@@ -354,6 +358,138 @@ class DataStore {
         this.dailyReports.set(p.id, []);
       }
     }
+
+    this.seedMockNotifications(isoNow);
+  }
+
+  private seedMockNotifications(isoNow: string) {
+    const allProposals = this.proposals;
+    const seedData: Array<{
+      proposalId: string;
+      type: NotificationType;
+      priority: NotificationPriority;
+      title: string;
+      content: string;
+      recipientIds?: string[];
+    }> = [];
+
+    for (const p of allProposals) {
+      const hh = this.households.get(p.id) || [];
+
+      if (p.status === 'public_notice' || p.status === 'approved' || p.status === 'construction' || p.status === 'completed' || p.status === 'rejected') {
+        seedData.push({
+          proposalId: p.id,
+          type: 'vote_result',
+          priority: p.status === 'rejected' ? 'high' : 'medium',
+          title: `${p.communityName}${p.buildingNumber}投票结果出炉`,
+          content: p.status === 'rejected'
+            ? '很遗憾，本次加装电梯投票未通过。感谢您的参与！'
+            : p.status === 'completed'
+            ? '电梯加装项目已顺利完工并交付使用！'
+            : '投票已通过，项目即将进入下一阶段。',
+        });
+      }
+
+      const nodes = this.progressNodes.get(p.id) || [];
+      const completedNodes = nodes.filter((n) => n.status === 'completed');
+      if (completedNodes.length > 0) {
+        const lastCompleted = completedNodes[completedNodes.length - 1];
+        seedData.push({
+          proposalId: p.id,
+          type: 'progress_node',
+          priority: 'medium',
+          title: `${p.communityName}${p.buildingNumber}施工进度更新`,
+          content: `「${lastCompleted.title}」阶段已完成！点击查看详情。`,
+        });
+      }
+
+      if ((p.status === 'construction' || p.status === 'completed') && hh.length > 0) {
+        const feeData = this.getFeeEstimate(p.id);
+        if (feeData) {
+          const targetHousehold = hh[Math.floor(hh.length / 2)];
+          const feeItem = feeData.items.find((i) => i.householdId === targetHousehold.id);
+          seedData.push({
+            proposalId: p.id,
+            type: 'payment_reminder',
+            priority: 'high',
+            title: `${p.communityName}${p.buildingNumber}资金催缴通知`,
+            content: `尊敬的业主，您需分摊费用约${feeItem ? Math.round(feeItem.estimatedFee).toLocaleString() : '0'}元，请及时缴纳。`,
+            recipientIds: [targetHousehold.id],
+          });
+        }
+      }
+    }
+
+    for (const s of seedData.slice(0, 6)) {
+      const hh = this.households.get(s.proposalId) || [];
+      const recipientIds = s.recipientIds && s.recipientIds.length > 0
+        ? s.recipientIds
+        : hh.map((h) => h.id);
+      this.notifications.push({
+        id: genId('notif'),
+        type: s.type,
+        priority: s.priority,
+        recipientType: s.recipientIds && s.recipientIds.length > 0 ? 'household' : 'all',
+        recipientIds,
+        proposalId: s.proposalId,
+        title: s.title,
+        content: s.content,
+        createdAt: new Date(new Date(isoNow).getTime() - Math.random() * 86400000 * 5).toISOString(),
+        readBy: [],
+      });
+    }
+  }
+
+  createNotification(data: Omit<Notification, 'id' | 'createdAt' | 'readBy'>): Notification {
+    const n: Notification = {
+      ...data,
+      id: genId('notif'),
+      createdAt: new Date().toISOString(),
+      readBy: [],
+    };
+    this.notifications.push(n);
+    return n;
+  }
+
+  getNotifications(params: { householdId?: string; proposalId?: string; unreadOnly?: boolean; limit?: number }): Notification[] {
+    let list = [...this.notifications];
+    if (params.householdId) {
+      list = list.filter((n) => n.recipientType === 'all' || n.recipientIds.includes(params.householdId!));
+    }
+    if (params.proposalId) {
+      list = list.filter((n) => n.proposalId === params.proposalId);
+    }
+    if (params.unreadOnly && params.householdId) {
+      list = list.filter((n) => !n.readBy.includes(params.householdId!));
+    }
+    list.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    if (params.limit) list = list.slice(0, params.limit);
+    return list;
+  }
+
+  getUnreadCount(householdId: string, proposalId?: string): number {
+    return this.getNotifications({ householdId, proposalId, unreadOnly: true }).length;
+  }
+
+  markAsRead(notificationId: string, householdId: string): boolean {
+    const n = this.notifications.find((x) => x.id === notificationId);
+    if (!n) return false;
+    if (!n.readBy.includes(householdId)) {
+      n.readBy.push(householdId);
+    }
+    return true;
+  }
+
+  markAllAsRead(householdId: string, proposalId?: string): number {
+    const list = this.getNotifications({ householdId, proposalId, unreadOnly: true });
+    let count = 0;
+    for (const n of list) {
+      if (!n.readBy.includes(householdId)) {
+        n.readBy.push(householdId);
+        count++;
+      }
+    }
+    return count;
   }
 
   getProposals(params?: { status?: string; search?: string }): Proposal[] {

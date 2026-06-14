@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import db from './lib/db.js';
 import { calcFloorCoefficient } from '../shared/calculator.js';
-import type { VoteOption, Proposal, ProgressNodeStatus, ConstructionDailyReport } from '../shared/types.js';
+import type { VoteOption, Proposal, ProgressNodeStatus, ConstructionDailyReport, NotificationType, NotificationPriority } from '../shared/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -120,6 +120,26 @@ app.post('/api/votes', (req, res) => {
   const weight = option === 'abstain' ? 0 : hh.floorCoefficient;
   const r = db.submitVote({ proposalId, householdId, option, weight });
   if ('error' in r) return fail(res, r.error);
+
+  const p = db.getProposal(proposalId);
+  if (p) {
+    const result = db.getVoteResult(proposalId);
+    if (result && (result.votingRate >= 95 || (result.votingRate >= 50 && (result.weightedAgreeRate >= 66.67 || result.weightedAgreeRate < 50)))) {
+      if (p.status === 'voting') {
+        dispatchNotification({
+          type: 'vote_result',
+          priority: result.passed ? 'medium' : 'high',
+          proposalId,
+          title: `${p.communityName}${p.buildingNumber}投票结果出炉`,
+          content: result.passed
+            ? `投票已通过！参与率${result.votingRate.toFixed(1)}%，同意率${result.weightedAgreeRate.toFixed(1)}%。`
+            : `很遗憾，本次投票未通过。参与率${result.votingRate.toFixed(1)}%，同意率${result.weightedAgreeRate.toFixed(1)}%。`,
+          relatedId: proposalId,
+          data: { passed: result.passed, votingRate: result.votingRate, weightedAgreeRate: result.weightedAgreeRate },
+        });
+      }
+    }
+  }
   ok(res, r);
 });
 
@@ -162,12 +182,28 @@ app.put('/api/proposals/:id/progress/:nodeId', (req, res) => {
     startDate?: string;
     endDate?: string;
   };
+  const nodesBefore = db.getProgressNodes(req.params.id);
+  const nodeBefore = nodesBefore.find((n) => n.id === req.params.nodeId);
   const patch: Parameters<typeof db.updateProgressNode>[2] = {};
   if (status) patch.status = status;
   if (startDate !== undefined) patch.startDate = startDate;
   if (endDate !== undefined) patch.endDate = endDate;
   const n = db.updateProgressNode(req.params.id, req.params.nodeId, patch);
   if (!n) return fail(res, '节点不存在', 404);
+  if (status === 'completed' && nodeBefore?.status !== 'completed') {
+    const p = db.getProposal(req.params.id);
+    if (p) {
+      dispatchNotification({
+        type: 'progress_node',
+        priority: 'medium',
+        proposalId: req.params.id,
+        title: `${p.communityName}${p.buildingNumber}施工进度更新`,
+        content: `「${n.title}」阶段已完成！点击查看施工详情。`,
+        relatedId: n.id,
+        data: { nodeId: n.id, nodeTitle: n.title, stepIndex: n.stepIndex },
+      });
+    }
+  }
   ok(res, n);
 });
 
@@ -185,7 +221,10 @@ app.get('/api/proposals/:id/finances', (req, res) => {
 });
 
 app.post('/api/finances', (req, res) => {
-  const body = req.body as Parameters<typeof db.addFinance>[0];
+  const body = req.body as Parameters<typeof db.addFinance>[0] & {
+    triggerPaymentReminder?: boolean;
+    reminderRecipientIds?: string[];
+  };
   if (
     !body.proposalId ||
     !body.category ||
@@ -200,6 +239,37 @@ app.post('/api/finances', (req, res) => {
     budgetAmount: +body.budgetAmount,
     actualAmount: body.actualAmount != null ? +body.actualAmount : 0,
   });
+
+  if (body.triggerPaymentReminder) {
+    const p = db.getProposal(body.proposalId);
+    if (p) {
+      const hh = db.getHouseholds(body.proposalId);
+      const estimate = db.getFeeEstimate(body.proposalId);
+      const recipientIds = body.reminderRecipientIds?.length
+        ? body.reminderRecipientIds
+        : hh.map((h) => h.id);
+      for (const rid of recipientIds) {
+        const feeItem = estimate?.items.find((i) => i.householdId === rid);
+        const household = hh.find((h) => h.id === rid);
+        dispatchNotification({
+          type: 'payment_reminder',
+          priority: 'high',
+          proposalId: body.proposalId,
+          title: `${p.communityName}${p.buildingNumber}资金催缴通知`,
+          content: `尊敬的${household?.floor}楼${household?.roomNumber}业主，${body.categoryName}阶段已产生费用。您需分摊费用约${feeItem ? Math.round(feeItem.estimatedFee).toLocaleString() : '0'}元，请及时缴纳。`,
+          recipientIds: [rid],
+          relatedId: r.id,
+          data: {
+            financeId: r.id,
+            category: body.category,
+            categoryName: body.categoryName,
+            estimatedFee: feeItem?.estimatedFee || 0,
+          },
+        });
+      }
+    }
+  }
+
   ok(res, r);
 });
 
@@ -259,6 +329,69 @@ app.delete('/api/proposals/:id/daily-reports/:reportId', (req, res) => {
   const success = db.deleteDailyReport(req.params.id, req.params.reportId);
   if (!success) return fail(res, '日报不存在', 404);
   ok(res, { message: '删除成功' });
+});
+
+function dispatchNotification(data: {
+  type: NotificationType;
+  priority: NotificationPriority;
+  proposalId: string;
+  title: string;
+  content: string;
+  recipientIds?: string[];
+  relatedId?: string;
+  data?: Record<string, unknown>;
+}) {
+  const p = db.getProposal(data.proposalId);
+  if (!p) return;
+  const hh = db.getHouseholds(data.proposalId);
+  const recipientIds = data.recipientIds && data.recipientIds.length > 0
+    ? data.recipientIds
+    : hh.map((h) => h.id);
+  db.createNotification({
+    type: data.type,
+    priority: data.priority,
+    recipientType: data.recipientIds && data.recipientIds.length > 0 ? 'household' : 'all',
+    recipientIds,
+    proposalId: data.proposalId,
+    title: data.title,
+    content: data.content,
+    relatedId: data.relatedId,
+    data: data.data,
+  });
+}
+
+app.get('/api/notifications', (req, res) => {
+  const householdId = typeof req.query.householdId === 'string' ? req.query.householdId : undefined;
+  const proposalId = typeof req.query.proposalId === 'string' ? req.query.proposalId : undefined;
+  const unreadOnly = req.query.unreadOnly === 'true';
+  const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : undefined;
+  if (!householdId) return fail(res, '缺少householdId参数');
+  const list = db.getNotifications({ householdId, proposalId, unreadOnly, limit });
+  ok(res, list);
+});
+
+app.get('/api/notifications/unread-count', (req, res) => {
+  const householdId = typeof req.query.householdId === 'string' ? req.query.householdId : undefined;
+  const proposalId = typeof req.query.proposalId === 'string' ? req.query.proposalId : undefined;
+  if (!householdId) return fail(res, '缺少householdId参数');
+  const count = db.getUnreadCount(householdId, proposalId);
+  ok(res, { count });
+});
+
+app.post('/api/notifications/:id/read', (req, res) => {
+  const householdId = req.body.householdId as string | undefined;
+  if (!householdId) return fail(res, '缺少householdId');
+  const success = db.markAsRead(req.params.id, householdId);
+  if (!success) return fail(res, '通知不存在', 404);
+  ok(res, { message: '已标记为已读' });
+});
+
+app.post('/api/notifications/read-all', (req, res) => {
+  const householdId = req.body.householdId as string | undefined;
+  const proposalId = typeof req.body.proposalId === 'string' ? req.body.proposalId : undefined;
+  if (!householdId) return fail(res, '缺少householdId');
+  const count = db.markAllAsRead(householdId, proposalId);
+  ok(res, { count, message: `已标记${count}条为已读` });
 });
 
 app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
