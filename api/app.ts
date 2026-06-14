@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import db from './lib/db.js';
 import { calcFloorCoefficient } from '../shared/calculator.js';
-import type { VoteOption, Proposal, ProgressNodeStatus } from '../shared/types.js';
+import type { VoteOption, Proposal, ProgressNodeStatus, ConstructionDailyReport } from '../shared/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -207,6 +207,58 @@ app.get('/api/calc/floor-coefficient', (req, res) => {
   const floor = Number(req.query.floor);
   if (!Number.isFinite(floor)) return fail(res, 'floor参数必须为数字');
   ok(res, { floor, coefficient: calcFloorCoefficient(floor) });
+});
+
+app.get('/api/proposals/:id/daily-reports', (req, res) => {
+  const { progressNodeId, startDate, endDate } = req.query;
+  const params = {
+    progressNodeId: typeof progressNodeId === 'string' ? progressNodeId : undefined,
+    startDate: typeof startDate === 'string' ? startDate : undefined,
+    endDate: typeof endDate === 'string' ? endDate : undefined,
+  };
+  const reports = db.getDailyReports(req.params.id, params);
+  ok(res, reports);
+});
+
+app.get('/api/proposals/:id/daily-reports/:reportId', (req, res) => {
+  const r = db.getDailyReport(req.params.id, req.params.reportId);
+  if (!r) return fail(res, '日报不存在', 404);
+  ok(res, r);
+});
+
+app.post('/api/proposals/:id/daily-reports', (req, res) => {
+  const body = req.body as Omit<ConstructionDailyReport, 'id' | 'createdAt' | 'updatedAt'>;
+  if (!body.reportDate || !body.constructionContent || !body.constructionProgress || !body.reporter) {
+    return fail(res, '缺少必填字段：日期、施工内容、进度描述、上报人');
+  }
+  const p = db.getProposal(req.params.id);
+  if (!p) return fail(res, '提案不存在', 404);
+  if (p.status !== 'construction') {
+    return fail(res, '当前提案状态不允许提交施工日报');
+  }
+  const existing = db.getDailyReports(req.params.id).find((r) => r.reportDate === body.reportDate);
+  if (existing) {
+    return fail(res, '该日期已存在施工日报，请修改或删除原有日报');
+  }
+  const r = db.addDailyReport({
+    ...body,
+    proposalId: req.params.id,
+    photos: body.photos || [],
+  });
+  ok(res, r);
+});
+
+app.put('/api/proposals/:id/daily-reports/:reportId', (req, res) => {
+  const body = req.body as Partial<Omit<ConstructionDailyReport, 'id' | 'proposalId' | 'createdAt'>>;
+  const r = db.updateDailyReport(req.params.id, req.params.reportId, body);
+  if (!r) return fail(res, '日报不存在', 404);
+  ok(res, r);
+});
+
+app.delete('/api/proposals/:id/daily-reports/:reportId', (req, res) => {
+  const success = db.deleteDailyReport(req.params.id, req.params.reportId);
+  if (!success) return fail(res, '日报不存在', 404);
+  ok(res, { message: '删除成功' });
 });
 
 app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {

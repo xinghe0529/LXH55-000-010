@@ -9,6 +9,7 @@ import type {
   FinanceRecord,
   VoteOption,
   ProgressNodeStatus,
+  ConstructionDailyReport,
 } from '../../shared/types';
 
 type ApiResponse<T> = { success: true; data: T } | { success: false; error: string };
@@ -37,6 +38,13 @@ async function put<T>(url: string, body: unknown): Promise<T> {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(body),
+  });
+  return handle<T>(res);
+}
+async function del<T>(url: string): Promise<T> {
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: { Accept: 'application/json' },
   });
   return handle<T>(res);
 }
@@ -86,6 +94,22 @@ export const api = {
   addFinance: (data: Omit<FinanceRecord, 'id'>) => post<FinanceRecord>('/api/finances', data),
   getFloorCoefficient: (floor: number) =>
     get<{ floor: number; coefficient: number }>(`/api/calc/floor-coefficient?floor=${floor}`),
+  getDailyReports: (proposalId: string, params?: { progressNodeId?: string; startDate?: string; endDate?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.progressNodeId) q.set('progressNodeId', params.progressNodeId);
+    if (params?.startDate) q.set('startDate', params.startDate);
+    if (params?.endDate) q.set('endDate', params.endDate);
+    const qs = q.toString();
+    return get<ConstructionDailyReport[]>(`/api/proposals/${proposalId}/daily-reports${qs ? '?' + qs : ''}`);
+  },
+  getDailyReport: (proposalId: string, reportId: string) =>
+    get<ConstructionDailyReport>(`/api/proposals/${proposalId}/daily-reports/${reportId}`),
+  addDailyReport: (proposalId: string, data: Omit<ConstructionDailyReport, 'id' | 'proposalId' | 'createdAt' | 'updatedAt'>) =>
+    post<ConstructionDailyReport>(`/api/proposals/${proposalId}/daily-reports`, data),
+  updateDailyReport: (proposalId: string, reportId: string, data: Partial<Omit<ConstructionDailyReport, 'id' | 'proposalId' | 'createdAt'>>) =>
+    put<ConstructionDailyReport>(`/api/proposals/${proposalId}/daily-reports/${reportId}`, data),
+  deleteDailyReport: (proposalId: string, reportId: string) =>
+    del<{ message: string }>(`/api/proposals/${proposalId}/daily-reports/${reportId}`),
 };
 
 export default api;

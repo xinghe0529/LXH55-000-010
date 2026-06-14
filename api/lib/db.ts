@@ -5,6 +5,7 @@ import type {
   Appeal,
   ProgressNode,
   FinanceRecord,
+  ConstructionDailyReport,
 } from '../../shared/types.js';
 import {
   generateHouseholds,
@@ -21,6 +22,7 @@ class DataStore {
   private appeals: Appeal[] = [];
   private progressNodes: Map<string, ProgressNode[]> = new Map();
   private financeRecords: Map<string, FinanceRecord[]> = new Map();
+  private dailyReports: Map<string, ConstructionDailyReport[]> = new Map();
 
   constructor() {
     this.seedMockData();
@@ -258,6 +260,99 @@ class DataStore {
           createdAt: isoNow,
         });
       }
+
+      if (p.status === 'construction') {
+        const nodes = this.progressNodes.get(p.id) || [];
+        const inProgressNode = nodes.find((n) => n.status === 'in_progress');
+        const seedReports: ConstructionDailyReport[] = [];
+        for (let i = 0; i < 15; i++) {
+          const reportDate = daysAgo(18 - i);
+          const weatherOptions = ['晴', '多云', '阴', '小雨'];
+          const weather = weatherOptions[i % weatherOptions.length];
+          const contents = [
+            '今日进行地基钢筋绑扎作业，完成总量的60%',
+            '继续地基混凝土浇筑，使用C30商砼25立方',
+            '地基养护作业，洒水覆盖保温膜',
+            '钢结构构件进场验收，检查焊缝质量',
+            '开始钢立柱吊装作业，共完成3根立柱',
+            '钢立柱焊接加固，检测垂直度偏差',
+            '横梁安装作业，完成首层横梁安装',
+            '二层钢结构安装，高强度螺栓紧固',
+            '三层钢结构安装，焊缝探伤检测',
+            '玻璃幕墙龙骨安装，测量定位放线',
+            '幕墙玻璃吊装，密封胶打缝处理',
+            '电梯导轨支架安装，基准线放线',
+            '电梯导轨安装，调整垂直度',
+            '轿厢缓冲器安装，底坑清理',
+            '脚手架拆除作业，现场安全防护',
+          ];
+          const progresses = [
+            '地基施工阶段，整体进度15%',
+            '地基施工阶段，整体进度25%',
+            '地基施工阶段，整体进度30%',
+            '地基养护完成，准备钢结构施工',
+            '钢结构施工阶段，整体进度35%',
+            '钢结构施工阶段，整体进度40%',
+            '钢结构施工阶段，整体进度48%',
+            '钢结构施工阶段，整体进度55%',
+            '钢结构施工阶段，整体进度62%',
+            '幕墙施工阶段，整体进度68%',
+            '幕墙施工阶段，整体进度75%',
+            '电梯安装阶段，整体进度80%',
+            '电梯安装阶段，整体进度85%',
+            '电梯安装阶段，整体进度88%',
+            '电梯安装阶段，整体进度90%',
+          ];
+          const photoUrls = [
+            'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&h=600&fit=crop',
+            'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=800&h=600&fit=crop',
+            'https://images.unsplash.com/photo-1587582423116-ec07293f0395?w=800&h=600&fit=crop',
+            'https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=800&h=600&fit=crop',
+            'https://images.unsplash.com/photo-1590650516494-0c8e4a4dd67e?w=800&h=600&fit=crop',
+          ];
+          const nextPlans = [
+            '明日继续钢筋绑扎，计划完成剩余40%',
+            '明日进行混凝土养护，检查强度',
+            '明日组织钢结构进场验收',
+            '明日开始钢立柱吊装准备工作',
+            '明日继续剩余钢立柱吊装',
+            '明日进行焊缝质量检测',
+            '明日开始二层横梁安装',
+            '明日进行三层钢结构安装',
+            '明日开始幕墙龙骨安装准备',
+            '明日继续幕墙龙骨安装',
+            '明日进行玻璃打胶养护',
+            '明日开始电梯导轨安装',
+            '明日继续导轨调整作业',
+            '明日开始轿厢组装',
+            '明日进行脚手架拆除收尾',
+          ];
+          seedReports.push({
+            id: `${p.id}-report-${i}`,
+            proposalId: p.id,
+            progressNodeId: inProgressNode?.id,
+            reportDate,
+            weather,
+            temperature: `${18 + (i % 10)}°C`,
+            constructionContent: contents[i],
+            constructionProgress: progresses[i],
+            workerCount: 6 + (i % 4),
+            materials: i % 3 === 0 ? '钢筋2吨，混凝土30立方' : i % 3 === 1 ? '钢结构构件5件' : '玻璃幕墙6块，密封胶20支',
+            issues: i === 5 ? '昨日进场的部分螺栓规格不符，已联系供应商更换' : i === 10 ? '因小雨影响，上午施工延迟2小时' : undefined,
+            nextPlan: nextPlans[i],
+            photos: [
+              { url: photoUrls[i % photoUrls.length], description: '施工现场全景' },
+              { url: photoUrls[(i + 1) % photoUrls.length], description: '施工作业特写' },
+            ],
+            reporter: '施工队 李队长',
+            createdAt: isoNow,
+            updatedAt: isoNow,
+          });
+        }
+        this.dailyReports.set(p.id, seedReports);
+      } else {
+        this.dailyReports.set(p.id, []);
+      }
     }
   }
 
@@ -298,6 +393,7 @@ class DataStore {
     }));
     this.progressNodes.set(p.id, nodes as ProgressNode[]);
     this.financeRecords.set(p.id, []);
+    this.dailyReports.set(p.id, []);
     return p;
   }
 
@@ -396,6 +492,64 @@ class DataStore {
     list.push(r);
     this.financeRecords.set(data.proposalId, list);
     return r;
+  }
+
+  getDailyReports(proposalId: string, params?: { progressNodeId?: string; startDate?: string; endDate?: string }): ConstructionDailyReport[] {
+    let list = [...(this.dailyReports.get(proposalId) || [])];
+    if (params?.progressNodeId) {
+      list = list.filter((r) => r.progressNodeId === params.progressNodeId);
+    }
+    if (params?.startDate) {
+      list = list.filter((r) => r.reportDate >= params.startDate!);
+    }
+    if (params?.endDate) {
+      list = list.filter((r) => r.reportDate <= params.endDate!);
+    }
+    return list.sort((a, b) => b.reportDate.localeCompare(a.reportDate));
+  }
+
+  getDailyReport(proposalId: string, reportId: string): ConstructionDailyReport | undefined {
+    const list = this.dailyReports.get(proposalId) || [];
+    return list.find((r) => r.id === reportId);
+  }
+
+  addDailyReport(
+    data: Omit<ConstructionDailyReport, 'id' | 'createdAt' | 'updatedAt'>
+  ): ConstructionDailyReport {
+    const now = new Date().toISOString();
+    const r: ConstructionDailyReport = {
+      ...data,
+      id: genId('report'),
+      createdAt: now,
+      updatedAt: now,
+    };
+    const list = this.dailyReports.get(data.proposalId) || [];
+    list.push(r);
+    this.dailyReports.set(data.proposalId, list);
+    return r;
+  }
+
+  updateDailyReport(
+    proposalId: string,
+    reportId: string,
+    patch: Partial<Omit<ConstructionDailyReport, 'id' | 'proposalId' | 'createdAt'>>
+  ): ConstructionDailyReport | undefined {
+    const list = this.dailyReports.get(proposalId);
+    if (!list) return undefined;
+    const r = list.find((x) => x.id === reportId);
+    if (!r) return undefined;
+    Object.assign(r, patch, { updatedAt: new Date().toISOString() });
+    return r;
+  }
+
+  deleteDailyReport(proposalId: string, reportId: string): boolean {
+    const list = this.dailyReports.get(proposalId);
+    if (!list) return false;
+    const idx = list.findIndex((x) => x.id === reportId);
+    if (idx === -1) return false;
+    list.splice(idx, 1);
+    this.dailyReports.set(proposalId, list);
+    return true;
   }
 }
 

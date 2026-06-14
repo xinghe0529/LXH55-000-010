@@ -18,6 +18,9 @@ import {
   Activity,
   Layers,
   Receipt,
+  ArrowRight,
+  Plus,
+  Cloud,
 } from 'lucide-react';
 import { useUIStore } from '../store/ui';
 import api from '../lib/apiClient';
@@ -30,6 +33,7 @@ import {
   type ProgressNode,
   type FinanceRecord,
   type VoteResult,
+  type ConstructionDailyReport,
 } from '../../shared/types';
 import { formatCurrency } from '../../shared/calculator';
 
@@ -99,7 +103,7 @@ function InfoItem({
   );
 }
 
-function TimelineNode({ node }: { node: ProgressNode }) {
+function TimelineNode({ node, reportCount }: { node: ProgressNode; reportCount?: number }) {
   const isInProgress = node.status === 'in_progress';
   const isCompleted = node.status === 'completed';
 
@@ -183,6 +187,15 @@ function TimelineNode({ node }: { node: ProgressNode }) {
                 {att.name}
               </button>
             ))}
+          </div>
+        )}
+
+        {reportCount != null && reportCount > 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-200/60">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-50 text-primary-700 text-xs font-medium border border-primary-100">
+              <FileText className="w-3 h-3" />
+              {reportCount} 条施工日报
+            </div>
           </div>
         )}
       </div>
@@ -275,6 +288,7 @@ export default function ProgressBoardPage() {
     summary: { budget: number; actual: number };
   } | null>(null);
   const [voteResult, setVoteResult] = useState<VoteResult | null>(null);
+  const [dailyReports, setDailyReports] = useState<ConstructionDailyReport[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>('all');
 
   useEffect(() => {
@@ -284,17 +298,19 @@ export default function ProgressBoardPage() {
     (async () => {
       setLoading(true);
       try {
-        const [p, prog, fin, vr] = await Promise.all([
+        const [p, prog, fin, vr, reports] = await Promise.all([
           api.getProposal(id),
           api.getProgress(id),
           api.getFinances(id),
           api.getVoteResult(id).catch(() => null),
+          api.getDailyReports(id).catch(() => []),
         ]);
         if (!alive) return;
         setProposal(p);
         setProgress(prog);
         setFinances(fin);
         setVoteResult(vr);
+        setDailyReports(reports);
       } catch (e) {
         showToast((e as Error).message, 'error');
       } finally {
@@ -353,6 +369,19 @@ export default function ProgressBoardPage() {
     () => finances?.summary.actual ?? 0,
     [finances]
   );
+
+  const dailyReportStats = useMemo(() => {
+    const total = dailyReports.length;
+    const totalPhotos = dailyReports.reduce((sum, r) => sum + (r.photos?.length || 0), 0);
+    const latestReport = dailyReports[0];
+    const reportsByNode = new Map<string, number>();
+    dailyReports.forEach((r) => {
+      if (r.progressNodeId) {
+        reportsByNode.set(r.progressNodeId, (reportsByNode.get(r.progressNodeId) || 0) + 1);
+      }
+    });
+    return { total, totalPhotos, latestReport, reportsByNode };
+  }, [dailyReports]);
 
   if (loading) {
     return (
@@ -553,9 +582,99 @@ export default function ProgressBoardPage() {
 
               <div className="space-y-2">
                 {sortedProgress.map((node) => (
-                  <TimelineNode key={node.id} node={node} />
+                  <TimelineNode
+                    key={node.id}
+                    node={node}
+                    reportCount={dailyReportStats.reportsByNode.get(node.id)}
+                  />
                 ))}
               </div>
+            </div>
+
+            <div className="card p-6 grain-overlay mb-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center shadow-md">
+                    <FileText className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-slate-800">
+                      施工日报
+                    </h3>
+                    <p className="text-xs text-slate-500">每日进度与照片记录</p>
+                  </div>
+                </div>
+                <Link
+                  to={`/proposal/${id}/daily-reports`}
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 transition-colors"
+                >
+                  查看全部
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="p-3 rounded-xl bg-primary-50 border border-primary-100 text-center">
+                  <div className="text-2xl font-display font-black text-primary-700">
+                    {dailyReportStats.total}
+                  </div>
+                  <div className="text-[11px] text-primary-600 font-medium">累计日报</div>
+                </div>
+                <div className="p-3 rounded-xl bg-accent-50 border border-accent-100 text-center">
+                  <div className="text-2xl font-display font-black text-accent-700">
+                    {dailyReportStats.totalPhotos}
+                  </div>
+                  <div className="text-[11px] text-accent-600 font-medium">现场照片</div>
+                </div>
+              </div>
+
+              {dailyReportStats.latestReport && (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="text-xs font-semibold text-slate-700">
+                      {dailyReportStats.latestReport.reportDate}
+                    </span>
+                    {dailyReportStats.latestReport.weather && (
+                      <span className="inline-flex items-center gap-1 text-xs text-slate-500 ml-auto">
+                        <Cloud className="w-3 h-3" />
+                        {dailyReportStats.latestReport.weather}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-slate-600 line-clamp-2 mb-2">
+                    {dailyReportStats.latestReport.constructionContent}
+                  </p>
+                  {dailyReportStats.latestReport.photos && dailyReportStats.latestReport.photos.length > 0 && (
+                    <div className="flex gap-1.5">
+                      {dailyReportStats.latestReport.photos.slice(0, 3).map((photo, idx) => (
+                        <div key={idx} className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200">
+                          <img
+                            src={photo.url}
+                            alt={photo.description || ''}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ))}
+                      {dailyReportStats.latestReport.photos.length > 3 && (
+                        <div className="w-12 h-12 rounded-lg bg-slate-200 flex items-center justify-center text-xs font-medium text-slate-600">
+                          +{dailyReportStats.latestReport.photos.length - 3}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {proposal?.status === 'construction' && (
+                <Link
+                  to={`/proposal/${id}/daily-reports`}
+                  className="btn-primary w-full justify-center mt-4"
+                >
+                  <Plus className="w-4 h-4" />
+                  提交今日日报
+                </Link>
+              )}
             </div>
 
             <div className="card p-6 grain-overlay">

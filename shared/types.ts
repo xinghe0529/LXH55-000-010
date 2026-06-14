@@ -143,3 +143,29 @@ export const FINANCE_CATEGORIES: Array<{ key: FinanceRecord['category']; label: 
   { key: 'inspection', label: '验收检测费' },
   { key: 'other', label: '其他费用' },
 ];
+
+export interface ConstructionDailyPhoto {
+  url: string;
+  description?: string;
+}
+
+export interface ConstructionDailyReport {
+  id: string;
+  proposalId: string;
+  progressNodeId?: string;
+  reportDate: string;
+  weather?: string;
+  temperature?: string;
+  constructionContent: string;
+  constructionProgress: string;
+  workerCount?: number;
+  materials?: string;
+  issues?: string;
+  nextPlan?: string;
+  photos: ConstructionDailyPhoto[];
+  reporter: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const WEATHER_OPTIONS = ['晴', '多云', '阴', '小雨', '中雨', '大雨', '雷阵雨', '小雪', '中雪', '大雪', '雾', '霾'];
