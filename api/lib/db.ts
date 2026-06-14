@@ -265,6 +265,45 @@ class DataStore {
         });
       }
 
+      if (p.id === 'p-001' && hh.length > 5) {
+        this.appeals.push({
+          id: genId('appeal'),
+          proposalId: p.id,
+          householdId: hh[4].id,
+          reason: '我家住一楼，加装电梯对我无任何收益，且会带来噪音和采光影响，反对费用分摊方案中一楼的分摊比例。',
+          status: 'reviewed',
+          reply: '已受理您的申诉，我们将重新评估一楼住户的费用分摊比例，并组织相关方协商。',
+          reviewedAt: new Date(now.getTime() - 86400000).toISOString(),
+          reviewer: '管理员',
+          createdAt: new Date(now.getTime() - 86400000 * 2).toISOString(),
+        });
+        this.appeals.push({
+          id: genId('appeal'),
+          proposalId: p.id,
+          householdId: hh[7].id,
+          reason: '分摊费用过高，家庭经济困难，请求减免部分费用或允许分期付款。',
+          status: 'resolved',
+          reply: '经审核，您的经济困难情况属实。已批准您可分三期缴纳，每期缴纳1/3，最后一期延期至项目验收后支付。',
+          reviewedAt: new Date(now.getTime() - 86400000 * 3).toISOString(),
+          reviewer: '管理员',
+          createdAt: new Date(now.getTime() - 86400000 * 5).toISOString(),
+        });
+      }
+
+      if (p.id === 'p-005' && hh.length > 3) {
+        this.appeals.push({
+          id: genId('appeal'),
+          proposalId: p.id,
+          householdId: hh[1].id,
+          reason: '投票过程中存在代签行为，部分业主并未亲自投票，要求重新核实投票结果。',
+          status: 'rejected',
+          reply: '经核查，所有投票记录均有对应的身份验证记录，未发现代签行为。您的申诉不予支持。',
+          reviewedAt: new Date(now.getTime() - 86400000 * 2).toISOString(),
+          reviewer: '管理员',
+          createdAt: new Date(now.getTime() - 86400000 * 4).toISOString(),
+        });
+      }
+
       if (p.status === 'construction') {
         const nodes = this.progressNodes.get(p.id) || [];
         const inProgressNode = nodes.find((n) => n.status === 'in_progress');
@@ -615,6 +654,27 @@ class DataStore {
 
   getAppeals(proposalId: string): Appeal[] {
     return this.appeals.filter((a) => a.proposalId === proposalId);
+  }
+
+  getAllAppeals(params?: { status?: string; proposalId?: string }): Appeal[] {
+    let list = [...this.appeals];
+    if (params?.status) list = list.filter((a) => a.status === params.status);
+    if (params?.proposalId) list = list.filter((a) => a.proposalId === params.proposalId);
+    return list.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  }
+
+  getAppeal(id: string): Appeal | undefined {
+    return this.appeals.find((a) => a.id === id);
+  }
+
+  reviewAppeal(id: string, patch: { status: Appeal['status']; reply?: string; reviewer?: string }): Appeal | undefined {
+    const a = this.appeals.find((x) => x.id === id);
+    if (!a) return undefined;
+    a.status = patch.status;
+    if (patch.reply !== undefined) a.reply = patch.reply;
+    if (patch.reviewer !== undefined) a.reviewer = patch.reviewer;
+    a.reviewedAt = new Date().toISOString();
+    return a;
   }
 
   getProgressNodes(proposalId: string): ProgressNode[] {

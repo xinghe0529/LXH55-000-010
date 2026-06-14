@@ -83,7 +83,25 @@ export interface Appeal {
   status: 'pending' | 'reviewed' | 'resolved' | 'rejected';
   createdAt: string;
   reply?: string;
+  reviewedAt?: string;
+  reviewer?: string;
 }
+
+export type AppealStatus = Appeal['status'];
+
+export const APPEAL_STATUS_LABELS: Record<AppealStatus, string> = {
+  pending: '待处理',
+  reviewed: '已受理',
+  resolved: '已解决',
+  rejected: '已驳回',
+};
+
+export const APPEAL_STATUS_COLORS: Record<AppealStatus, string> = {
+  pending: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  reviewed: 'bg-primary-100 text-primary-700 border-primary-200',
+  resolved: 'bg-success-100 text-success-700 border-success-200',
+  rejected: 'bg-danger-100 text-danger-700 border-danger-200',
+};
 
 export interface ProgressNode {
   id: string;
@@ -170,7 +188,7 @@ export interface ConstructionDailyReport {
 
 export const WEATHER_OPTIONS = ['晴', '多云', '阴', '小雨', '中雨', '大雨', '雷阵雨', '小雪', '中雪', '大雪', '雾', '霾'];
 
-export type NotificationType = 'vote_result' | 'progress_node' | 'payment_reminder' | 'system';
+export type NotificationType = 'vote_result' | 'progress_node' | 'payment_reminder' | 'appeal_reply' | 'system';
 
 export type NotificationPriority = 'low' | 'medium' | 'high';
 
@@ -193,6 +211,7 @@ export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
   vote_result: '投票结果',
   progress_node: '施工进度',
   payment_reminder: '资金催缴',
+  appeal_reply: '申诉回复',
   system: '系统通知',
 };
 

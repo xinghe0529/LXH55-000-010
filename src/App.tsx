@@ -5,6 +5,7 @@ import ProposalComparePage from '@/pages/ProposalComparePage';
 import VotePanelPage from '@/pages/VotePanelPage';
 import ProgressBoardPage from '@/pages/ProgressBoardPage';
 import DailyReportsPage from '@/pages/DailyReportsPage';
+import AppealsAdminPage from '@/pages/AppealsAdminPage';
 import NewProposalModal from '@/components/NewProposalModal';
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/proposal/:id/vote" element={<VotePanelPage />} />
           <Route path="/proposal/:id/progress" element={<ProgressBoardPage />} />
           <Route path="/proposal/:id/daily-reports" element={<DailyReportsPage />} />
+          <Route path="/appeals" element={<AppealsAdminPage />} />
           <Route path="*" element={<Navigate to="/proposals" replace />} />
         </Route>
       </Routes>

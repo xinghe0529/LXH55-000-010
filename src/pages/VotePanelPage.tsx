@@ -21,6 +21,7 @@ import {
   Minus as MinusIcon,
   Info,
   ChevronDown,
+  MessageSquare,
 } from 'lucide-react';
 import { useUIStore } from '../store/ui';
 import api from '../lib/apiClient';
@@ -28,6 +29,8 @@ import {
   STATUS_LABELS,
   STATUS_COLORS,
   VOTE_LABELS,
+  APPEAL_STATUS_LABELS,
+  APPEAL_STATUS_COLORS,
   type Proposal,
   type Household,
   type FeeEstimateItem,
@@ -854,10 +857,19 @@ export default function VotePanelPage() {
                 <div className="space-y-3">
                   {appeals.map((a) => {
                     const hh = households.find((h) => h.id === a.householdId);
+                    const isResolved = a.status === 'resolved';
+                    const isRejected = a.status === 'rejected';
+                    const isReviewed = a.status === 'reviewed';
                     return (
                       <div
                         key={a.id}
-                        className="p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors"
+                        className={cn(
+                          'p-4 rounded-xl border bg-white hover:border-slate-300 transition-colors',
+                          a.status === 'pending' && 'border-yellow-300 border-l-4 border-l-yellow-400',
+                          isReviewed && 'border-primary-200 border-l-4 border-l-primary-400',
+                          isResolved && 'border-success-200 border-l-4 border-l-success-400',
+                          isRejected && 'border-danger-200 border-l-4 border-l-danger-400'
+                        )}
                       >
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <div className="flex items-center gap-2">
@@ -874,26 +886,35 @@ export default function VotePanelPage() {
                               </div>
                             </div>
                           </div>
-                          <span
-                            className={cn(
-                              'badge text-[11px]',
-                              a.status === 'pending' && 'bg-yellow-100 text-yellow-700 border-yellow-200',
-                              a.status === 'reviewed' && 'bg-primary-100 text-primary-700 border-primary-200',
-                              a.status === 'resolved' && 'bg-success-100 text-success-700 border-success-200',
-                              a.status === 'rejected' && 'bg-danger-100 text-danger-700 border-danger-200'
-                            )}
-                          >
-                            {a.status === 'pending' ? '待处理'
-                              : a.status === 'reviewed' ? '已受理'
-                              : a.status === 'resolved' ? '已解决'
-                              : '已驳回'}
+                          <span className={cn('badge text-[11px]', APPEAL_STATUS_COLORS[a.status])}>
+                            {APPEAL_STATUS_LABELS[a.status]}
                           </span>
                         </div>
                         <p className="text-sm text-slate-600 mt-2 pl-10">{a.reason}</p>
                         {a.reply && (
-                          <div className="mt-3 ml-10 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600">
-                            <div className="font-semibold text-slate-700 mb-0.5">官方回复：</div>
-                            {a.reply}
+                          <div className={cn(
+                            'mt-3 ml-10 p-3 rounded-lg border text-sm',
+                            isResolved && 'bg-success-50/50 border-success-200',
+                            isRejected && 'bg-danger-50/50 border-danger-200',
+                            isReviewed && 'bg-primary-50/50 border-primary-200',
+                            a.status === 'pending' && 'bg-slate-50 border-slate-200'
+                          )}>
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <MessageSquare className="w-3.5 h-3.5 text-primary-500" />
+                              <span className="font-semibold text-slate-700 text-xs">官方回复</span>
+                            </div>
+                            <p className="text-slate-600 text-xs leading-relaxed">{a.reply}</p>
+                            {(a.reviewer || a.reviewedAt) && (
+                              <div className="mt-2 pt-2 border-t border-slate-200/60 text-[11px] text-slate-400 flex items-center gap-3">
+                                {a.reviewer && <span>审核人：{a.reviewer}</span>}
+                                {a.reviewedAt && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {a.reviewedAt}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

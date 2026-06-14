@@ -5,6 +5,7 @@ import type {
   VoteRecord,
   VoteResult,
   Appeal,
+  AppealStatus,
   ProgressNode,
   FinanceRecord,
   VoteOption,
@@ -54,6 +55,11 @@ export interface ProposalWithResult extends Proposal {
   voteResult: VoteResult | null;
 }
 
+export interface EnrichedAppeal extends Appeal {
+  proposal: { id: string; communityName: string; buildingNumber: string } | null;
+  household: { id: string; unit: string; floor: number; roomNumber: string } | null;
+}
+
 export interface Stats {
   total: number;
   voting: number;
@@ -87,6 +93,15 @@ export const api = {
   submitAppeal: (data: { proposalId: string; householdId: string; reason: string }) =>
     post<Appeal>('/api/appeals', data),
   getAppeals: (id: string) => get<Appeal[]>(`/api/proposals/${id}/appeals`),
+  getAllAppeals: (params?: { status?: string; proposalId?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set('status', params.status);
+    if (params?.proposalId) q.set('proposalId', params.proposalId);
+    const qs = q.toString();
+    return get<EnrichedAppeal[]>(`/api/appeals${qs ? '?' + qs : ''}`);
+  },
+  reviewAppeal: (id: string, data: { status: AppealStatus; reply?: string; reviewer?: string }) =>
+    put<Appeal>(`/api/appeals/${id}/review`, data),
   getProgress: (id: string) => get<ProgressNode[]>(`/api/proposals/${id}/progress`),
   updateProgressNode: (proposalId: string, nodeId: string, patch: Partial<{ status: ProgressNodeStatus; startDate: string; endDate: string }>) =>
     put<ProgressNode>(`/api/proposals/${proposalId}/progress/${nodeId}`, patch),

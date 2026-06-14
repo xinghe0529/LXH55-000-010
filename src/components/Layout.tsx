@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { Building2, Vote, Gauge, Plus, Search, X, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { Building2, Vote, Gauge, Plus, Search, X, CheckCircle2, AlertCircle, Info, ShieldAlert } from 'lucide-react';
 import { useUIStore } from '../store/ui';
 import { cn } from '../lib/utils';
 import { NotificationPanel } from './NotificationPanel';
@@ -54,6 +54,10 @@ export default function Layout() {
             <NavLink to="/proposals" className={navClass}>
               <Building2 className="w-4 h-4" />
               提案广场
+            </NavLink>
+            <NavLink to="/appeals" className={navClass}>
+              <ShieldAlert className="w-4 h-4" />
+              申诉审核
             </NavLink>
           </nav>
 

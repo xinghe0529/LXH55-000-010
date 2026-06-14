@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import db from './lib/db.js';
 import { calcFloorCoefficient } from '../shared/calculator.js';
-import type { VoteOption, Proposal, ProgressNodeStatus, ConstructionDailyReport, NotificationType, NotificationPriority } from '../shared/types.js';
+import type { VoteOption, Proposal, ProgressNodeStatus, ConstructionDailyReport, NotificationType, NotificationPriority, AppealStatus } from '../shared/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -170,6 +170,58 @@ app.post('/api/appeals', (req, res) => {
 
 app.get('/api/proposals/:id/appeals', (req, res) => {
   ok(res, db.getAppeals(req.params.id));
+});
+
+app.get('/api/appeals', (req, res) => {
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const proposalId = typeof req.query.proposalId === 'string' ? req.query.proposalId : undefined;
+  const list = db.getAllAppeals({ status, proposalId });
+  const enriched = list.map((a) => {
+    const p = db.getProposal(a.proposalId);
+    const hh = db.getHouseholds(a.proposalId);
+    const household = hh.find((h) => h.id === a.householdId);
+    return {
+      ...a,
+      proposal: p ? { id: p.id, communityName: p.communityName, buildingNumber: p.buildingNumber } : null,
+      household: household ? { id: household.id, unit: household.unit, floor: household.floor, roomNumber: household.roomNumber } : null,
+    };
+  });
+  ok(res, enriched);
+});
+
+app.put('/api/appeals/:id/review', (req, res) => {
+  const { status, reply, reviewer } = req.body as {
+    status: AppealStatus;
+    reply?: string;
+    reviewer?: string;
+  };
+  if (!status || !['reviewed', 'resolved', 'rejected'].includes(status)) {
+    return fail(res, '状态参数不合法，必须为 reviewed/resolved/rejected');
+  }
+  const appeal = db.getAppeal(req.params.id);
+  if (!appeal) return fail(res, '申诉不存在', 404);
+  const beforeStatus = appeal.status;
+  const updated = db.reviewAppeal(req.params.id, { status, reply, reviewer });
+  if (!updated) return fail(res, '审核失败', 500);
+
+  if (beforeStatus === 'pending' && status !== 'pending') {
+    const p = db.getProposal(appeal.proposalId);
+    if (p) {
+      const statusText = status === 'reviewed' ? '已受理' : status === 'resolved' ? '已解决' : '已驳回';
+      dispatchNotification({
+        type: 'appeal_reply',
+        priority: status === 'rejected' ? 'high' : 'medium',
+        proposalId: appeal.proposalId,
+        title: `${p.communityName}${p.buildingNumber}申诉处理通知`,
+        content: `您提交的异议申诉已处理，处理结果：${statusText}。${reply ? `回复：${reply}` : ''}`,
+        recipientIds: [appeal.householdId],
+        relatedId: appeal.id,
+        data: { appealId: appeal.id, status, reply },
+      });
+    }
+  }
+
+  ok(res, updated);
 });
 
 app.get('/api/proposals/:id/progress', (req, res) => {
