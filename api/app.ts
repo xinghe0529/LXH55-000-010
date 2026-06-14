@@ -125,7 +125,7 @@ app.post('/api/votes', (req, res) => {
   if (p) {
     const result = db.getVoteResult(proposalId);
     if (result && (result.votingRate >= 95 || (result.votingRate >= 50 && (result.weightedAgreeRate >= 66.67 || result.weightedAgreeRate < 50)))) {
-      if (p.status === 'voting') {
+      if (p.status === 'voting' && !db.hasNotificationByType(proposalId, 'vote_result')) {
         dispatchNotification({
           type: 'vote_result',
           priority: result.passed ? 'medium' : 'high',
@@ -190,7 +190,7 @@ app.put('/api/proposals/:id/progress/:nodeId', (req, res) => {
   if (endDate !== undefined) patch.endDate = endDate;
   const n = db.updateProgressNode(req.params.id, req.params.nodeId, patch);
   if (!n) return fail(res, '节点不存在', 404);
-  if (status === 'completed' && nodeBefore?.status !== 'completed') {
+  if (status === 'completed' && nodeBefore?.status !== 'completed' && !db.hasNotificationByRelatedId(req.params.id, 'progress_node', req.params.nodeId)) {
     const p = db.getProposal(req.params.id);
     if (p) {
       dispatchNotification({
@@ -249,6 +249,7 @@ app.post('/api/finances', (req, res) => {
         ? body.reminderRecipientIds
         : hh.map((h) => h.id);
       for (const rid of recipientIds) {
+        if (db.hasPaymentReminderForRecipient(body.proposalId, r.id, rid)) continue;
         const feeItem = estimate?.items.find((i) => i.householdId === rid);
         const household = hh.find((h) => h.id === rid);
         dispatchNotification({

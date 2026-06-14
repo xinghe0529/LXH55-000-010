@@ -492,6 +492,26 @@ class DataStore {
     return count;
   }
 
+  hasNotificationByType(proposalId: string, type: NotificationType): boolean {
+    return this.notifications.some((n) => n.proposalId === proposalId && n.type === type);
+  }
+
+  hasNotificationByRelatedId(proposalId: string, type: NotificationType, relatedId: string): boolean {
+    return this.notifications.some(
+      (n) => n.proposalId === proposalId && n.type === type && n.relatedId === relatedId
+    );
+  }
+
+  hasPaymentReminderForRecipient(proposalId: string, financeId: string, recipientId: string): boolean {
+    return this.notifications.some(
+      (n) =>
+        n.proposalId === proposalId &&
+        n.type === 'payment_reminder' &&
+        n.relatedId === financeId &&
+        n.recipientIds.includes(recipientId)
+    );
+  }
+
   getProposals(params?: { status?: string; search?: string }): Proposal[] {
     let list = [...this.proposals];
     if (params?.status && params.status !== 'all') {
