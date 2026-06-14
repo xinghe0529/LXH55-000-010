@@ -82,10 +82,24 @@ function MetricCard({
   const bestIndex = useMemo(() => {
     if (!metric.highlightBest) return -1;
 
-    const numericValues = proposals.map((p, i) => {
-      if (metric.highlightBest === 'rate') {
-        return p.voteResult ? p.voteResult.weightedAgreeRate : -Infinity;
+    if (metric.highlightBest === 'rate') {
+      const validEntries: Array<{ index: number; value: number }> = [];
+      proposals.forEach((p, index) => {
+        if (p.voteResult && typeof p.voteResult.weightedAgreeRate === 'number' && isFinite(p.voteResult.weightedAgreeRate)) {
+          validEntries.push({ index, value: p.voteResult.weightedAgreeRate });
+        }
+      });
+      if (validEntries.length === 0) return -1;
+      let best = validEntries[0];
+      for (let i = 1; i < validEntries.length; i++) {
+        if (validEntries[i].value > best.value) {
+          best = validEntries[i];
+        }
       }
+      return best.index;
+    }
+
+    const numericValues = proposals.map((p, i) => {
       if (metric.key === 'totalCost') return p.estimatedTotalCost;
       if (metric.key === 'duration') return p.estimatedDuration;
       return Number(values[i]) || 0;
@@ -98,9 +112,10 @@ function MetricCard({
       return numericValues.indexOf(min);
     }
 
-    if (metric.highlightBest === 'max' || metric.highlightBest === 'rate') {
-      const max = Math.max(...numericValues);
-      if (max === -Infinity) return -1;
+    if (metric.highlightBest === 'max') {
+      const validValues = numericValues.filter((v) => isFinite(v) && v > 0);
+      if (validValues.length === 0) return -1;
+      const max = Math.max(...validValues);
       return numericValues.indexOf(max);
     }
 
@@ -126,62 +141,74 @@ function MetricCard({
         </div>
       </div>
       <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${proposals.length}, 1fr)` }}>
-        {proposals.map((p, i) => (
-          <div
-            key={p.id}
-            className={cn(
-              'rounded-xl p-4 text-center transition-all',
-              bestIndex === i
-                ? 'bg-gradient-to-br from-success-50 to-success-100 border-2 border-success-300'
-                : 'bg-slate-50 border border-slate-200'
-            )}
-          >
-            {bestIndex === i && (
-              <div className="flex items-center justify-center gap-1 text-success-600 text-xs font-semibold mb-2">
-                <TrendingUp className="w-3.5 h-3.5" />
-                最优
-              </div>
-            )}
+        {proposals.map((p, i) => {
+          const hasNoVoteData = metric.key === 'passRate' && !p.voteResult;
+          return (
             <div
+              key={p.id}
               className={cn(
-                'text-2xl font-display font-black',
-                bestIndex === i ? 'text-success-700' : 'text-slate-800'
+                'rounded-xl p-4 text-center transition-all',
+                bestIndex === i
+                  ? 'bg-gradient-to-br from-success-50 to-success-100 border-2 border-success-300'
+                  : hasNoVoteData
+                    ? 'bg-slate-100 border border-dashed border-slate-300'
+                    : 'bg-slate-50 border border-slate-200'
               )}
             >
-              {values[i]}
-            </div>
-            {metric.key === 'passRate' && p.voteResult && (
-              <div className="mt-2">
-                <div className="text-xs text-slate-500 mb-1">
-                  参与率 {p.voteResult.votingRate.toFixed(1)}%
+              {bestIndex === i && (
+                <div className="flex items-center justify-center gap-1 text-success-600 text-xs font-semibold mb-2">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  最优
                 </div>
-                <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+              )}
+              <div
+                className={cn(
+                  'text-2xl font-display font-black',
+                  bestIndex === i
+                    ? 'text-success-700'
+                    : hasNoVoteData
+                      ? 'text-slate-400'
+                      : 'text-slate-800'
+                )}
+              >
+                {values[i]}
+              </div>
+              {metric.key === 'passRate' && p.voteResult && (
+                <div className="mt-2">
+                  <div className="text-xs text-slate-500 mb-1">
+                    参与率 {p.voteResult.votingRate.toFixed(1)}%
+                  </div>
+                  <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all',
+                        p.voteResult.passed
+                          ? 'bg-gradient-to-r from-success-400 to-success-500'
+                          : 'bg-gradient-to-r from-danger-400 to-danger-500'
+                      )}
+                      style={{ width: `${Math.min(100, p.voteResult.weightedAgreeRate)}%` }}
+                    />
+                  </div>
                   <div
                     className={cn(
-                      'h-full rounded-full transition-all',
-                      p.voteResult.passed
-                        ? 'bg-gradient-to-r from-success-400 to-success-500'
-                        : 'bg-gradient-to-r from-danger-400 to-danger-500'
+                      'text-xs font-semibold mt-1 flex items-center justify-center gap-1',
+                      p.voteResult.passed ? 'text-success-600' : 'text-danger-600'
                     )}
-                    style={{ width: `${Math.min(100, p.voteResult.weightedAgreeRate)}%` }}
-                  />
+                  >
+                    {p.voteResult.passed ? (
+                      <><CheckCircle className="w-3 h-3" /> 已通过</>
+                    ) : (
+                      <><XCircle className="w-3 h-3" /> 未通过</>
+                    )}
+                  </div>
                 </div>
-                <div
-                  className={cn(
-                    'text-xs font-semibold mt-1 flex items-center justify-center gap-1',
-                    p.voteResult.passed ? 'text-success-600' : 'text-danger-600'
-                  )}
-                >
-                  {p.voteResult.passed ? (
-                    <><CheckCircle className="w-3 h-3" /> 已通过</>
-                  ) : (
-                    <><XCircle className="w-3 h-3" /> 未通过</>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
+              )}
+              {hasNoVoteData && (
+                <div className="text-xs text-slate-400 mt-1">投票尚未开始</div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
