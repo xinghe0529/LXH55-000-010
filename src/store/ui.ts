@@ -18,6 +18,10 @@ interface UIState {
   setProposals: (p: ProposalWithResult[]) => void;
   loading: boolean;
   setLoading: (v: boolean) => void;
+  selectedProposalIds: string[];
+  toggleSelectedProposal: (id: string) => void;
+  clearSelectedProposals: () => void;
+  setSelectedProposals: (ids: string[]) => void;
 }
 
 let _toastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -42,4 +46,19 @@ export const useUIStore = create<UIState>((set, get) => ({
   setProposals: (p) => set({ proposals: p }),
   loading: false,
   setLoading: (v) => set({ loading: v }),
+  selectedProposalIds: [],
+  toggleSelectedProposal: (id) =>
+    set((state) => {
+      const exists = state.selectedProposalIds.includes(id);
+      if (exists) {
+        return { selectedProposalIds: state.selectedProposalIds.filter((x) => x !== id) };
+      }
+      if (state.selectedProposalIds.length >= 4) {
+        state.showToast('最多只能选择 4 个提案进行对比', 'error');
+        return {};
+      }
+      return { selectedProposalIds: [...state.selectedProposalIds, id] };
+    }),
+  clearSelectedProposals: () => set({ selectedProposalIds: [] }),
+  setSelectedProposals: (ids) => set({ selectedProposalIds: ids }),
 }));

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Building2,
   Search,
@@ -14,6 +14,10 @@ import {
   Vote,
   Gauge,
   Layers,
+  GitCompare,
+  Square,
+  CheckSquare,
+  X,
 } from 'lucide-react';
 import { useUIStore } from '../store/ui';
 import api, { type ProposalWithResult, type Stats } from '../lib/apiClient';
@@ -68,7 +72,15 @@ function StatCard({
   );
 }
 
-function ProposalCard({ p }: { p: ProposalWithResult }) {
+function ProposalCard({
+  p,
+  selected,
+  onToggleSelect,
+}: {
+  p: ProposalWithResult;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
+}) {
   const result = p.voteResult;
   const votingProgress = useMemo(() => {
     if (!result) return 0;
@@ -76,7 +88,26 @@ function ProposalCard({ p }: { p: ProposalWithResult }) {
   }, [result]);
 
   return (
-    <div className="card p-6 group hover:-translate-y-0.5 grain-overlay relative">
+    <div
+      className={cn(
+        'card p-6 group hover:-translate-y-0.5 grain-overlay relative transition-all duration-200',
+        selected && 'ring-2 ring-primary-500 ring-offset-2'
+      )}
+    >
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          onToggleSelect(p.id);
+        }}
+        className="absolute top-3 right-3 p-1.5 rounded-lg hover:bg-slate-100 transition-colors z-10"
+        title={selected ? '取消选择' : '选择对比'}
+      >
+        {selected ? (
+          <CheckSquare className="w-5 h-5 text-primary-600" />
+        ) : (
+          <Square className="w-5 h-5 text-slate-400 group-hover:text-slate-600" />
+        )}
+      </button>
       <div className="flex flex-col sm:flex-row sm:items-start gap-5">
         <div className="flex-shrink-0">
           <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary-50 via-primary-100 to-primary-200 border border-primary-200 flex flex-col items-center justify-center shadow-inner-subtle">
@@ -184,6 +215,7 @@ function ProposalCard({ p }: { p: ProposalWithResult }) {
 }
 
 export default function ProposalsPage() {
+  const navigate = useNavigate();
   const proposals = useUIStore((s) => s.proposals);
   const setProposals = useUIStore((s) => s.setProposals);
   const loading = useUIStore((s) => s.loading);
@@ -193,6 +225,9 @@ export default function ProposalsPage() {
   const keyword = useUIStore((s) => s.keyword);
   const setKeyword = useUIStore((s) => s.setKeyword);
   const showToast = useUIStore((s) => s.showToast);
+  const selectedProposalIds = useUIStore((s) => s.selectedProposalIds);
+  const toggleSelectedProposal = useUIStore((s) => s.toggleSelectedProposal);
+  const clearSelectedProposals = useUIStore((s) => s.clearSelectedProposals);
   const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
@@ -330,6 +365,49 @@ export default function ProposalsPage() {
           </div>
         </div>
 
+        {/* 对比操作栏 */}
+        {selectedProposalIds.length > 0 && (
+          <div className="card p-4 mb-6 bg-gradient-to-r from-primary-50 to-accent-50 border-primary-200 animate-fade-in">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary-500 flex items-center justify-center">
+                  <GitCompare className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-800">已选择 {selectedProposalIds.length} 个提案</div>
+                  <div className="text-xs text-slate-500">请选择 2-4 个提案进行横向对比</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={clearSelectedProposals}
+                  className="btn-outline !px-4 !py-2 !text-sm"
+                >
+                  <X className="w-4 h-4" />
+                  清除选择
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedProposalIds.length < 2) {
+                      showToast('请至少选择 2 个提案进行对比', 'error');
+                      return;
+                    }
+                    navigate(`/proposals/compare?ids=${selectedProposalIds.join(',')}`);
+                  }}
+                  disabled={selectedProposalIds.length < 2}
+                  className={cn(
+                    'btn-primary !px-4 !py-2 !text-sm',
+                    selectedProposalIds.length < 2 && 'opacity-50 cursor-not-allowed'
+                  )}
+                >
+                  <GitCompare className="w-4 h-4" />
+                  开始对比
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {[1, 2, 3, 4].map((i) => (
@@ -356,7 +434,12 @@ export default function ProposalsPage() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             {proposals.map((p) => (
-              <ProposalCard key={p.id} p={p} />
+              <ProposalCard
+                key={p.id}
+                p={p}
+                selected={selectedProposalIds.includes(p.id)}
+                onToggleSelect={toggleSelectedProposal}
+              />
             ))}
           </div>
         )}
