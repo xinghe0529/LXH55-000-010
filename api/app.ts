@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import db from './lib/db.js';
 import { calcFloorCoefficient } from '../shared/calculator.js';
-import type { VoteOption, Proposal, ProgressNodeStatus, ConstructionDailyReport, NotificationType, NotificationPriority, AppealStatus, PaymentStatus, ElevatorBrand, ElevatorPlan } from '../shared/types.js';
+import type { VoteOption, Proposal, ProgressNodeStatus, ConstructionDailyReport, NotificationType, NotificationPriority, AppealStatus, PaymentStatus, ElevatorBrand, ElevatorPlan, IssueFeedback, IssueFeedbackStatus, IssueFeedbackPriority } from '../shared/types.js';
 
 dotenv.config();
 
@@ -586,6 +586,178 @@ app.delete('/api/elevator/plans/:id', (req, res) => {
   const success = db.deleteElevatorPlan(req.params.id);
   if (!success) return fail(res, '方案不存在', 404);
   ok(res, { message: '删除成功' });
+});
+
+app.post('/api/issues', (req, res) => {
+  const body = req.body as {
+    proposalId: string;
+    householdId: string;
+    category: IssueFeedback['category'];
+    title: string;
+    description: string;
+    priority?: IssueFeedbackPriority;
+    progressNodeId?: string;
+    photos?: { url: string; description?: string }[];
+  };
+  if (!body.proposalId || !body.householdId || !body.category || !body.title || !body.description) {
+    return fail(res, '缺少必填字段：提案ID、住户ID、类别、标题、描述');
+  }
+  const p = db.getProposal(body.proposalId);
+  if (!p) return fail(res, '提案不存在', 404);
+  if (p.status !== 'construction') {
+    return fail(res, '当前提案状态不允许提交问题反馈');
+  }
+  const issue = db.createIssueFeedback({
+    proposalId: body.proposalId,
+    householdId: body.householdId,
+    category: body.category,
+    title: body.title,
+    description: body.description,
+    priority: body.priority || 'medium',
+    progressNodeId: body.progressNodeId,
+    photos: body.photos || [],
+  });
+  dispatchNotification({
+    type: 'system',
+    priority: issue.priority === 'urgent' || issue.priority === 'high' ? 'high' : 'medium',
+    proposalId: issue.proposalId,
+    title: `${p.communityName}${p.buildingNumber}新问题反馈`,
+    content: `业主提交了新的问题反馈：${issue.title}（${issue.priority === 'urgent' ? '紧急' : issue.priority === 'high' ? '高' : issue.priority === 'medium' ? '中' : '低'}优先级）`,
+    relatedId: issue.id,
+    data: { issueId: issue.id, category: issue.category, priority: issue.priority },
+  });
+  ok(res, issue);
+});
+
+app.get('/api/issues', (req, res) => {
+  const proposalId = typeof req.query.proposalId === 'string' ? req.query.proposalId : undefined;
+  const householdId = typeof req.query.householdId === 'string' ? req.query.householdId : undefined;
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+  const list = db.getIssueFeedbacks({ proposalId, householdId, status: status as IssueFeedbackStatus | undefined, category });
+  const enriched = list.map((issue) => {
+    const p = db.getProposal(issue.proposalId);
+    const hh = db.getHouseholds(issue.proposalId);
+    const household = hh.find((h) => h.id === issue.householdId);
+    const nodes = db.getProgressNodes(issue.proposalId);
+    const progressNode = nodes.find((n) => n.id === issue.progressNodeId);
+    return {
+      ...issue,
+      proposal: p ? { id: p.id, communityName: p.communityName, buildingNumber: p.buildingNumber, status: p.status } : null,
+      household: household ? { id: household.id, unit: household.unit, floor: household.floor, roomNumber: household.roomNumber } : null,
+      progressNode: progressNode ? { id: progressNode.id, title: progressNode.title, stepIndex: progressNode.stepIndex } : null,
+    };
+  });
+  ok(res, enriched);
+});
+
+app.get('/api/issues/stats', (req, res) => {
+  const proposalId = typeof req.query.proposalId === 'string' ? req.query.proposalId : undefined;
+  ok(res, db.getIssueStats(proposalId));
+});
+
+app.get('/api/issues/:id', (req, res) => {
+  const issue = db.getIssueFeedback(req.params.id);
+  if (!issue) return fail(res, '问题反馈不存在', 404);
+  const p = db.getProposal(issue.proposalId);
+  const hh = db.getHouseholds(issue.proposalId);
+  const household = hh.find((h) => h.id === issue.householdId);
+  const nodes = db.getProgressNodes(issue.proposalId);
+  const progressNode = nodes.find((n) => n.id === issue.progressNodeId);
+  ok(res, {
+    ...issue,
+    proposal: p ? { id: p.id, communityName: p.communityName, buildingNumber: p.buildingNumber, status: p.status } : null,
+    household: household ? { id: household.id, unit: household.unit, floor: household.floor, roomNumber: household.roomNumber } : null,
+    progressNode: progressNode ? { id: progressNode.id, title: progressNode.title, stepIndex: progressNode.stepIndex } : null,
+  });
+});
+
+app.put('/api/issues/:id', (req, res) => {
+  const body = req.body as {
+    status?: IssueFeedbackStatus;
+    priority?: IssueFeedbackPriority;
+    assignedTo?: string;
+    description?: string;
+    category?: IssueFeedback['category'];
+    title?: string;
+  };
+  const issue = db.getIssueFeedback(req.params.id);
+  if (!issue) return fail(res, '问题反馈不存在', 404);
+  const beforeStatus = issue.status;
+  const updated = db.updateIssueFeedback(req.params.id, body);
+  if (!updated) return fail(res, '更新失败', 500);
+
+  if (body.status && beforeStatus !== body.status) {
+    const p = db.getProposal(issue.proposalId);
+    if (p) {
+      const statusText = body.status === 'pending' ? '待处理' : body.status === 'processing' ? '处理中' : body.status === 'resolved' ? '已解决' : '已关闭';
+      dispatchNotification({
+        type: 'system',
+        priority: 'medium',
+        proposalId: issue.proposalId,
+        title: `${p.communityName}${p.buildingNumber}问题反馈状态更新`,
+        content: `您提交的问题反馈「${issue.title}」状态已更新为：${statusText}`,
+        recipientIds: [issue.householdId],
+        relatedId: issue.id,
+        data: { issueId: issue.id, status: body.status },
+      });
+    }
+  }
+  ok(res, updated);
+});
+
+app.post('/api/issues/:id/replies', (req, res) => {
+  const body = req.body as {
+    content: string;
+    replier: string;
+    replierRole: 'construction' | 'admin' | 'household';
+  };
+  if (!body.content || !body.replier || !body.replierRole) {
+    return fail(res, '缺少必填字段：内容、回复人、回复人角色');
+  }
+  const issue = db.getIssueFeedback(req.params.id);
+  if (!issue) return fail(res, '问题反馈不存在', 404);
+  const reply = db.addIssueFeedbackReply(req.params.id, {
+    content: body.content,
+    replier: body.replier,
+    replierRole: body.replierRole,
+  });
+  if (!reply) return fail(res, '回复失败', 500);
+
+  if (body.replierRole !== 'household') {
+    const p = db.getProposal(issue.proposalId);
+    if (p) {
+      dispatchNotification({
+        type: 'system',
+        priority: 'medium',
+        proposalId: issue.proposalId,
+        title: `${p.communityName}${p.buildingNumber}问题反馈新回复`,
+        content: `您提交的问题反馈「${issue.title}」收到了新回复`,
+        recipientIds: [issue.householdId],
+        relatedId: issue.id,
+        data: { issueId: issue.id, replyId: reply.id },
+      });
+    }
+  }
+  ok(res, reply);
+});
+
+app.get('/api/proposals/:id/issues', (req, res) => {
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+  const list = db.getIssueFeedbacks({ proposalId: req.params.id, status: status as IssueFeedbackStatus | undefined, category });
+  const enriched = list.map((issue) => {
+    const hh = db.getHouseholds(issue.proposalId);
+    const household = hh.find((h) => h.id === issue.householdId);
+    const nodes = db.getProgressNodes(issue.proposalId);
+    const progressNode = nodes.find((n) => n.id === issue.progressNodeId);
+    return {
+      ...issue,
+      household: household ? { id: household.id, unit: household.unit, floor: household.floor, roomNumber: household.roomNumber } : null,
+      progressNode: progressNode ? { id: progressNode.id, title: progressNode.title, stepIndex: progressNode.stepIndex } : null,
+    };
+  });
+  ok(res, enriched);
 });
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

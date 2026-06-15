@@ -295,3 +295,83 @@ export const MACHINE_ROOM_TYPE_LABELS: Record<ElevatorPlan['machineRoomType'], s
   without: '无机房',
   small: '小机房',
 };
+
+export type IssueFeedbackCategory = 'noise' | 'safety' | 'quality' | 'schedule' | 'other';
+
+export type IssueFeedbackStatus = 'pending' | 'processing' | 'resolved' | 'closed';
+
+export type IssueFeedbackPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface IssueFeedbackReply {
+  id: string;
+  feedbackId: string;
+  content: string;
+  replier: string;
+  replierRole: 'construction' | 'admin' | 'household';
+  createdAt: string;
+}
+
+export interface IssueFeedback {
+  id: string;
+  proposalId: string;
+  householdId: string;
+  category: IssueFeedbackCategory;
+  title: string;
+  description: string;
+  priority: IssueFeedbackPriority;
+  status: IssueFeedbackStatus;
+  progressNodeId?: string;
+  photos?: { url: string; description?: string }[];
+  createdAt: string;
+  updatedAt: string;
+  assignedTo?: string;
+  replies: IssueFeedbackReply[];
+}
+
+export type IssueFeedbackCategoryType = IssueFeedback['category'];
+export type IssueFeedbackStatusType = IssueFeedback['status'];
+export type IssueFeedbackPriorityType = IssueFeedback['priority'];
+
+export const ISSUE_CATEGORY_LABELS: Record<IssueFeedbackCategory, string> = {
+  noise: '噪音扰民',
+  safety: '安全隐患',
+  quality: '施工质量',
+  schedule: '工期进度',
+  other: '其他问题',
+};
+
+export const ISSUE_STATUS_LABELS: Record<IssueFeedbackStatus, string> = {
+  pending: '待处理',
+  processing: '处理中',
+  resolved: '已解决',
+  closed: '已关闭',
+};
+
+export const ISSUE_PRIORITY_LABELS: Record<IssueFeedbackPriority, string> = {
+  low: '低',
+  medium: '中',
+  high: '高',
+  urgent: '紧急',
+};
+
+export const ISSUE_CATEGORY_COLORS: Record<IssueFeedbackCategory, string> = {
+  noise: 'bg-purple-100 text-purple-700 border-purple-200',
+  safety: 'bg-red-100 text-red-700 border-red-200',
+  quality: 'bg-blue-100 text-blue-700 border-blue-200',
+  schedule: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  other: 'bg-slate-100 text-slate-700 border-slate-200',
+};
+
+export const ISSUE_STATUS_COLORS: Record<IssueFeedbackStatus, string> = {
+  pending: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  processing: 'bg-primary-100 text-primary-700 border-primary-200',
+  resolved: 'bg-success-100 text-success-700 border-success-200',
+  closed: 'bg-slate-100 text-slate-600 border-slate-200',
+};
+
+export const ISSUE_PRIORITY_COLORS: Record<IssueFeedbackPriority, string> = {
+  low: 'bg-slate-100 text-slate-600',
+  medium: 'bg-blue-100 text-blue-600',
+  high: 'bg-orange-100 text-orange-600',
+  urgent: 'bg-red-100 text-red-600',
+};

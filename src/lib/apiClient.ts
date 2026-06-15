@@ -16,6 +16,10 @@ import type {
   PaymentStatus,
   ElevatorBrand,
   ElevatorPlan,
+  IssueFeedback,
+  IssueFeedbackStatus,
+  IssueFeedbackPriority,
+  IssueFeedbackReply,
 } from '../../shared/types';
 
 type ApiResponse<T> = { success: true; data: T } | { success: false; error: string };
@@ -196,6 +200,85 @@ export const api = {
     put<ElevatorPlan>(`/api/elevator/plans/${id}`, data),
   deleteElevatorPlan: (id: string) =>
     del<{ message: string }>(`/api/elevator/plans/${id}`),
+
+  createIssueFeedback: (data: {
+    proposalId: string;
+    householdId: string;
+    category: IssueFeedback['category'];
+    title: string;
+    description: string;
+    priority?: IssueFeedbackPriority;
+    progressNodeId?: string;
+    photos?: { url: string; description?: string }[];
+  }) => post<IssueFeedback>('/api/issues', data),
+
+  getIssueFeedbacks: (params?: {
+    proposalId?: string;
+    householdId?: string;
+    status?: IssueFeedbackStatus;
+    category?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.proposalId) q.set('proposalId', params.proposalId);
+    if (params?.householdId) q.set('householdId', params.householdId);
+    if (params?.status) q.set('status', params.status);
+    if (params?.category) q.set('category', params.category);
+    const qs = q.toString();
+    return get<Array<IssueFeedback & {
+      proposal: { id: string; communityName: string; buildingNumber: string; status: string } | null;
+      household: { id: string; unit: string; floor: number; roomNumber: string } | null;
+      progressNode: { id: string; title: string; stepIndex: number } | null;
+    }>>(`/api/issues${qs ? '?' + qs : ''}`);
+  },
+
+  getIssueFeedback: (id: string) =>
+    get<IssueFeedback & {
+      proposal: { id: string; communityName: string; buildingNumber: string; status: string } | null;
+      household: { id: string; unit: string; floor: number; roomNumber: string } | null;
+      progressNode: { id: string; title: string; stepIndex: number } | null;
+    }>(`/api/issues/${id}`),
+
+  updateIssueFeedback: (id: string, data: {
+    status?: IssueFeedbackStatus;
+    priority?: IssueFeedbackPriority;
+    assignedTo?: string;
+    description?: string;
+    category?: IssueFeedback['category'];
+    title?: string;
+  }) => put<IssueFeedback>(`/api/issues/${id}`, data),
+
+  addIssueReply: (id: string, data: {
+    content: string;
+    replier: string;
+    replierRole: 'construction' | 'admin' | 'household';
+  }) => post<IssueFeedbackReply>(`/api/issues/${id}/replies`, data),
+
+  getProposalIssues: (proposalId: string, params?: {
+    status?: IssueFeedbackStatus;
+    category?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set('status', params.status);
+    if (params?.category) q.set('category', params.category);
+    const qs = q.toString();
+    return get<Array<IssueFeedback & {
+      household: { id: string; unit: string; floor: number; roomNumber: string } | null;
+      progressNode: { id: string; title: string; stepIndex: number } | null;
+    }>>(`/api/proposals/${proposalId}/issues${qs ? '?' + qs : ''}`);
+  },
+
+  getIssueStats: (proposalId?: string) => {
+    const q = new URLSearchParams();
+    if (proposalId) q.set('proposalId', proposalId);
+    const qs = q.toString();
+    return get<{
+      total: number;
+      pending: number;
+      processing: number;
+      resolved: number;
+      closed: number;
+    }>(`/api/issues/stats${qs ? '?' + qs : ''}`);
+  },
 };
 
 export default api;

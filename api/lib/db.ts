@@ -13,6 +13,10 @@ import type {
   PaymentStatus,
   ElevatorBrand,
   ElevatorPlan,
+  IssueFeedback,
+  IssueFeedbackReply,
+  IssueFeedbackStatus,
+  IssueFeedbackPriority,
 } from '../../shared/types.js';
 import {
   generateHouseholds,
@@ -34,6 +38,7 @@ class DataStore {
   private notifications: Notification[] = [];
   private elevatorBrands: ElevatorBrand[] = [];
   private elevatorPlans: ElevatorPlan[] = [];
+  private issueFeedbacks: IssueFeedback[] = [];
 
   constructor() {
     this.seedMockData();
@@ -400,6 +405,113 @@ class DataStore {
           });
         }
         this.dailyReports.set(p.id, seedReports);
+
+        if (hh.length > 3) {
+          const nodes = this.progressNodes.get(p.id) || [];
+          const inProgressNode = nodes.find((n) => n.status === 'in_progress');
+
+          this.issueFeedbacks.push({
+            id: genId('issue'),
+            proposalId: p.id,
+            householdId: hh[1].id,
+            category: 'noise',
+            title: '早上施工噪音太大，影响休息',
+            description: '最近一周早上6点多就开始施工，机器噪音很大，严重影响老人和孩子的休息，希望能推迟到8点以后再开始高噪音作业。',
+            priority: 'high',
+            status: 'processing',
+            progressNodeId: inProgressNode?.id,
+            photos: [],
+            createdAt: daysAgo(5) + 'T08:30:00.000Z',
+            updatedAt: daysAgo(4) + 'T10:00:00.000Z',
+            assignedTo: '施工队 李队长',
+            replies: [
+              {
+                id: genId('reply'),
+                feedbackId: '',
+                content: '已收到您的反馈，我们已调整施工时间，高噪音作业将推迟到早上8点以后开始。感谢您的理解与配合！',
+                replier: '施工队 李队长',
+                replierRole: 'construction',
+                createdAt: daysAgo(4) + 'T10:00:00.000Z',
+              },
+            ],
+          });
+
+          this.issueFeedbacks.push({
+            id: genId('issue'),
+            proposalId: p.id,
+            householdId: hh[3].id,
+            category: 'safety',
+            title: '施工现场防护措施不到位',
+            description: '我看到施工现场的安全网有破损，而且堆放的建筑材料靠近人行通道，担心有掉落物伤人的风险，请尽快处理。',
+            priority: 'urgent',
+            status: 'resolved',
+            progressNodeId: inProgressNode?.id,
+            photos: [],
+            createdAt: daysAgo(10) + 'T14:20:00.000Z',
+            updatedAt: daysAgo(8) + 'T16:00:00.000Z',
+            assignedTo: '安全员 王师傅',
+            replies: [
+              {
+                id: genId('reply'),
+                feedbackId: '',
+                content: '已收到安全隐患反馈，我们立即进行了整改：1. 更换了破损的安全网；2. 清理了通道旁的建筑材料；3. 增设了警示标识。感谢您的监督！',
+                replier: '安全员 王师傅',
+                replierRole: 'construction',
+                createdAt: daysAgo(9) + 'T09:00:00.000Z',
+              },
+              {
+                id: genId('reply'),
+                feedbackId: '',
+                content: '经复查，安全隐患已全部整改完毕，符合安全生产规范要求。',
+                replier: '项目管理员',
+                replierRole: 'admin',
+                createdAt: daysAgo(8) + 'T16:00:00.000Z',
+              },
+            ],
+          });
+
+          this.issueFeedbacks.push({
+            id: genId('issue'),
+            proposalId: p.id,
+            householdId: hh[5].id,
+            category: 'quality',
+            title: '钢结构焊缝质量疑问',
+            description: '我注意到部分钢立柱的焊缝看起来不太均匀，有些地方有气孔，担心焊接质量不过关，影响结构安全，希望能检测一下。',
+            priority: 'medium',
+            status: 'pending',
+            progressNodeId: inProgressNode?.id,
+            photos: [],
+            createdAt: daysAgo(2) + 'T11:15:00.000Z',
+            updatedAt: daysAgo(2) + 'T11:15:00.000Z',
+            replies: [],
+          });
+
+          this.issueFeedbacks.push({
+            id: genId('issue'),
+            proposalId: p.id,
+            householdId: hh[0].id,
+            category: 'schedule',
+            title: '工期是否会延误？',
+            description: '最近看到施工进度好像比预期慢了一些，想了解一下目前的工期安排，是否会出现延误的情况？',
+            priority: 'low',
+            status: 'resolved',
+            progressNodeId: inProgressNode?.id,
+            photos: [],
+            createdAt: daysAgo(15) + 'T16:40:00.000Z',
+            updatedAt: daysAgo(13) + 'T09:30:00.000Z',
+            assignedTo: '项目管理员',
+            replies: [
+              {
+                id: genId('reply'),
+                feedbackId: '',
+                content: '感谢您的关注。目前由于前期天气原因略有延误，但我们已通过增加施工人员和优化工序进行追赶，预计总工期不会受影响，仍将按计划完工。',
+                replier: '项目管理员',
+                replierRole: 'admin',
+                createdAt: daysAgo(13) + 'T09:30:00.000Z',
+              },
+            ],
+          });
+        }
       } else {
         this.dailyReports.set(p.id, []);
       }
@@ -1141,6 +1253,91 @@ class DataStore {
     if (idx === -1) return false;
     this.elevatorPlans.splice(idx, 1);
     return true;
+  }
+
+  createIssueFeedback(
+    data: Omit<IssueFeedback, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'priority' | 'replies'> & {
+      status?: IssueFeedbackStatus;
+      priority?: IssueFeedbackPriority;
+    }
+  ): IssueFeedback {
+    const now = new Date().toISOString();
+    const issue: IssueFeedback = {
+      ...data,
+      id: genId('issue'),
+      status: data.status || 'pending',
+      priority: data.priority || 'medium',
+      createdAt: now,
+      updatedAt: now,
+      replies: [],
+    };
+    this.issueFeedbacks.push(issue);
+    return issue;
+  }
+
+  getIssueFeedbacks(params?: {
+    proposalId?: string;
+    householdId?: string;
+    status?: IssueFeedbackStatus;
+    category?: string;
+    progressNodeId?: string;
+  }): IssueFeedback[] {
+    let list = [...this.issueFeedbacks];
+    if (params?.proposalId) list = list.filter((i) => i.proposalId === params.proposalId);
+    if (params?.householdId) list = list.filter((i) => i.householdId === params.householdId);
+    if (params?.status) list = list.filter((i) => i.status === params.status);
+    if (params?.category) list = list.filter((i) => i.category === params.category);
+    if (params?.progressNodeId) list = list.filter((i) => i.progressNodeId === params.progressNodeId);
+    return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  getIssueFeedback(id: string): IssueFeedback | undefined {
+    return this.issueFeedbacks.find((i) => i.id === id);
+  }
+
+  updateIssueFeedback(
+    id: string,
+    patch: Partial<Omit<IssueFeedback, 'id' | 'createdAt' | 'replies'>>
+  ): IssueFeedback | undefined {
+    const issue = this.issueFeedbacks.find((i) => i.id === id);
+    if (!issue) return undefined;
+    Object.assign(issue, patch, { updatedAt: new Date().toISOString() });
+    return issue;
+  }
+
+  addIssueFeedbackReply(
+    feedbackId: string,
+    data: Omit<IssueFeedbackReply, 'id' | 'feedbackId' | 'createdAt'>
+  ): IssueFeedbackReply | null {
+    const issue = this.issueFeedbacks.find((i) => i.id === feedbackId);
+    if (!issue) return null;
+    const reply: IssueFeedbackReply = {
+      ...data,
+      id: genId('reply'),
+      feedbackId,
+      createdAt: new Date().toISOString(),
+    };
+    issue.replies.push(reply);
+    issue.updatedAt = new Date().toISOString();
+    return reply;
+  }
+
+  getIssueStats(proposalId?: string): {
+    total: number;
+    pending: number;
+    processing: number;
+    resolved: number;
+    closed: number;
+  } {
+    let list = this.issueFeedbacks;
+    if (proposalId) list = list.filter((i) => i.proposalId === proposalId);
+    return {
+      total: list.length,
+      pending: list.filter((i) => i.status === 'pending').length,
+      processing: list.filter((i) => i.status === 'processing').length,
+      resolved: list.filter((i) => i.status === 'resolved').length,
+      closed: list.filter((i) => i.status === 'closed').length,
+    };
   }
 }
 
