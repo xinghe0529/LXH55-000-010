@@ -1,14 +1,9 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import cors from 'cors';
-import path from 'path';
 import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
 import db from './lib/db.js';
 import { calcFloorCoefficient } from '../shared/calculator.js';
 import type { VoteOption, Proposal, ProgressNodeStatus, ConstructionDailyReport, NotificationType, NotificationPriority, AppealStatus, PaymentStatus, ElevatorBrand, ElevatorPlan } from '../shared/types.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -593,6 +588,7 @@ app.delete('/api/elevator/plans/:id', (req, res) => {
   ok(res, { message: '删除成功' });
 });
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('[server error]', error);
   res.status(500).json({ success: false, error: 'Server internal error' });

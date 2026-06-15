@@ -543,6 +543,26 @@ export default function ElevatorConfigPage() {
     };
   }, [activeTab, filterBrandId, showToast]);
 
+  const fetchBrands = async () => {
+    try {
+      const list = await api.getElevatorBrands();
+      setBrands(list);
+    } catch (e) {
+      showToast((e as Error).message, 'error');
+    }
+  };
+
+  const fetchPlans = async () => {
+    try {
+      const list = await api.getElevatorPlans({
+        brandId: filterBrandId || undefined,
+      });
+      setPlans(list);
+    } catch (e) {
+      showToast((e as Error).message, 'error');
+    }
+  };
+
   const handleBrandSubmit = async (data: Partial<ElevatorBrand>) => {
     setBrandLoading(true);
     try {
