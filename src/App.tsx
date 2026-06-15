@@ -6,6 +6,7 @@ import VotePanelPage from '@/pages/VotePanelPage';
 import ProgressBoardPage from '@/pages/ProgressBoardPage';
 import DailyReportsPage from '@/pages/DailyReportsPage';
 import AppealsAdminPage from '@/pages/AppealsAdminPage';
+import ElevatorConfigPage from '@/pages/ElevatorConfigPage';
 import NewProposalModal from '@/components/NewProposalModal';
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/proposal/:id/progress" element={<ProgressBoardPage />} />
           <Route path="/proposal/:id/daily-reports" element={<DailyReportsPage />} />
           <Route path="/appeals" element={<AppealsAdminPage />} />
+          <Route path="/elevator-config" element={<ElevatorConfigPage />} />
           <Route path="*" element={<Navigate to="/proposals" replace />} />
         </Route>
       </Routes>

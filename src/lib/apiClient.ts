@@ -14,6 +14,8 @@ import type {
   Notification,
   PaymentRecord,
   PaymentStatus,
+  ElevatorBrand,
+  ElevatorPlan,
 } from '../../shared/types';
 
 type ApiResponse<T> = { success: true; data: T } | { success: false; error: string };
@@ -164,6 +166,36 @@ export const api = {
     put<PaymentRecord>(`/api/proposals/${proposalId}/payments/${paymentId}`, patch),
   initPayments: (proposalId: string) =>
     post<PaymentRecord[]>(`/api/proposals/${proposalId}/payments/init`, {}),
+
+  getElevatorBrands: (params?: { activeOnly?: boolean }) => {
+    const q = new URLSearchParams();
+    if (params?.activeOnly) q.set('activeOnly', 'true');
+    const qs = q.toString();
+    return get<ElevatorBrand[]>(`/api/elevator/brands${qs ? '?' + qs : ''}`);
+  },
+  getElevatorBrand: (id: string) => get<ElevatorBrand>(`/api/elevator/brands/${id}`),
+  createElevatorBrand: (data: Partial<ElevatorBrand>) =>
+    post<ElevatorBrand>('/api/elevator/brands', data),
+  updateElevatorBrand: (id: string, data: Partial<ElevatorBrand>) =>
+    put<ElevatorBrand>(`/api/elevator/brands/${id}`, data),
+  deleteElevatorBrand: (id: string) =>
+    del<{ message: string }>(`/api/elevator/brands/${id}`),
+
+  getElevatorPlans: (params?: { brandId?: string; activeOnly?: boolean }) => {
+    const q = new URLSearchParams();
+    if (params?.brandId) q.set('brandId', params.brandId);
+    if (params?.activeOnly) q.set('activeOnly', 'true');
+    const qs = q.toString();
+    return get<Array<ElevatorPlan & { brandName: string }>>(`/api/elevator/plans${qs ? '?' + qs : ''}`);
+  },
+  getElevatorPlan: (id: string) =>
+    get<ElevatorPlan & { brandName: string }>(`/api/elevator/plans/${id}`),
+  createElevatorPlan: (data: Partial<ElevatorPlan>) =>
+    post<ElevatorPlan>('/api/elevator/plans', data),
+  updateElevatorPlan: (id: string, data: Partial<ElevatorPlan>) =>
+    put<ElevatorPlan>(`/api/elevator/plans/${id}`, data),
+  deleteElevatorPlan: (id: string) =>
+    del<{ message: string }>(`/api/elevator/plans/${id}`),
 };
 
 export default api;

@@ -1,7 +1,10 @@
-import { useState } from 'react';
-import { X, Building, User, Calendar, ArrowUpToLine, FileText, Ruler } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Building, User, Calendar, ArrowUpToLine, FileText, Ruler, Package, ChevronDown, Check, Sparkles } from 'lucide-react';
 import { useUIStore } from '../store/ui';
 import api from '../lib/apiClient';
+import type { ElevatorPlan } from '../../shared/types';
+import { formatCurrency } from '../../shared/calculator';
+import { cn } from '../lib/utils';
 
 export default function NewProposalModal() {
   const open = useUIStore((s) => s.newProposalModal);
@@ -20,9 +23,38 @@ export default function NewProposalModal() {
     initiator: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [plans, setPlans] = useState<Array<ElevatorPlan & { brandName: string }>>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('');
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [showPlanPicker, setShowPlanPicker] = useState(false);
 
   const update = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    if (open) {
+      setPlansLoading(true);
+      api.getElevatorPlans({ activeOnly: true })
+        .then((list) => {
+          setPlans(list);
+        })
+        .catch((e) => {
+          showToast((e as Error).message, 'error');
+        })
+        .finally(() => {
+          setPlansLoading(false);
+        });
+    }
+  }, [open, showToast]);
+
+  const handleSelectPlan = (plan: ElevatorPlan & { brandName: string }) => {
+    setSelectedPlanId(plan.id);
+    update('estimatedTotalCost', plan.basePrice);
+    update('estimatedDuration', plan.constructionDays);
+    update('elevatorPlan', `${plan.brandName} ${plan.name} ${plan.loadCapacity}kg/${plan.passengerCount}人 ${plan.speed}m/s`);
+    setShowPlanPicker(false);
+    showToast(`已选择方案：${plan.brandName} ${plan.name}，费用和工期已自动填充`, 'success');
+  };
 
   const submit = async () => {
     if (!form.communityName || !form.buildingNumber || !form.initiator) {
@@ -44,6 +76,8 @@ export default function NewProposalModal() {
         estimatedDuration: 120,
         initiator: '',
       });
+      setSelectedPlanId('');
+      setShowPlanPicker(false);
       const list = await api.getProposals();
       useUIStore.getState().setProposals(list);
       close();
@@ -165,12 +199,98 @@ export default function NewProposalModal() {
             </div>
           </div>
 
+          <div className="relative">
+            <label className="label-base">
+              <Package className="w-4 h-4 inline mr-1 text-accent-500" />
+              选择电梯方案
+              <span className="text-xs text-slate-400 ml-2">从配置库选择可自动填充费用和工期</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowPlanPicker(!showPlanPicker)}
+              className={cn(
+                'w-full input-base text-left flex items-center justify-between',
+                selectedPlanId ? 'text-slate-900' : 'text-slate-400'
+              )}
+            >
+              <span className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-accent-500" />
+                {selectedPlanId
+                  ? plans.find((p) => p.id === selectedPlanId)?.name
+                  : '点击选择电梯方案...'}
+              </span>
+              <ChevronDown className={cn('w-4 h-4 text-slate-400 transition-transform', showPlanPicker && 'rotate-180')} />
+            </button>
+
+            {showPlanPicker && (
+              <div className="absolute z-20 top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-200 max-h-80 overflow-y-auto animate-slide-up">
+                {plansLoading ? (
+                  <div className="p-4 text-center text-sm text-slate-500">
+                    <div className="w-5 h-5 border-2 border-primary-200 border-t-primary-500 rounded-full animate-spin mx-auto mb-2" />
+                    加载中...
+                  </div>
+                ) : plans.length === 0 ? (
+                  <div className="p-6 text-center text-sm text-slate-500">
+                    <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                    暂无可用方案
+                  </div>
+                ) : (
+                  <div className="p-2 space-y-1">
+                    {plans.map((plan) => {
+                      const selected = selectedPlanId === plan.id;
+                      return (
+                        <button
+                          key={plan.id}
+                          type="button"
+                          onClick={() => handleSelectPlan(plan)}
+                          className={cn(
+                            'w-full p-3 rounded-lg text-left transition-all duration-200',
+                            selected
+                              ? 'bg-accent-50 border-2 border-accent-400'
+                              : 'hover:bg-slate-50 border-2 border-transparent'
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-semibold text-slate-900 text-sm truncate">{plan.name}</span>
+                                <span className="badge bg-primary-100 text-primary-700 border-primary-200 text-[10px] flex-shrink-0">
+                                  {plan.brandName}
+                                </span>
+                              </div>
+                              <div className="text-xs text-slate-500 mb-2">
+                                {plan.loadCapacity}kg / {plan.passengerCount}人 · {plan.speed}m/s
+                              </div>
+                              <div className="flex items-center gap-3 text-xs">
+                                <span className="text-accent-600 font-semibold">
+                                  {formatCurrency(plan.basePrice)}
+                                </span>
+                                <span className="text-primary-600">{plan.constructionDays}天</span>
+                                <span className="text-success-600">{plan.warrantyYears}年质保</span>
+                              </div>
+                            </div>
+                            {selected && (
+                              <div className="w-6 h-6 rounded-full bg-accent-500 flex items-center justify-center flex-shrink-0">
+                                <Check className="w-4 h-4 text-white" />
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="label-base">电梯方案描述</label>
             <textarea
               className="input-base min-h-[80px] resize-none"
               value={form.elevatorPlan}
               onChange={(e) => update('elevatorPlan', e.target.value)}
+              placeholder="可手动编辑方案描述，或从上方选择方案自动填充"
             />
           </div>
 

@@ -245,3 +245,53 @@ export const NOTIFICATION_PRIORITY_COLORS: Record<NotificationPriority, string> 
   medium: 'bg-yellow-100 text-yellow-700',
   high: 'bg-red-100 text-red-700',
 };
+
+export interface ElevatorBrand {
+  id: string;
+  name: string;
+  country: string;
+  description?: string;
+  logoUrl?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ElevatorPlan {
+  id: string;
+  brandId: string;
+  name: string;
+  loadCapacity: number;
+  passengerCount: number;
+  speed: number;
+  structureType: 'steel' | 'concrete' | 'glass' | 'hybrid';
+  driveType: 'traction' | 'hydraulic' | 'screw';
+  machineRoomType: 'with' | 'without' | 'small';
+  basePrice: number;
+  constructionDays: number;
+  warrantyYears: number;
+  description?: string;
+  features: string[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const STRUCTURE_TYPE_LABELS: Record<ElevatorPlan['structureType'], string> = {
+  steel: '钢结构',
+  concrete: '混凝土井道',
+  glass: '玻璃幕墙',
+  hybrid: '混合结构',
+};
+
+export const DRIVE_TYPE_LABELS: Record<ElevatorPlan['driveType'], string> = {
+  traction: '曳引式',
+  hydraulic: '液压式',
+  screw: '螺杆式',
+};
+
+export const MACHINE_ROOM_TYPE_LABELS: Record<ElevatorPlan['machineRoomType'], string> = {
+  with: '有机房',
+  without: '无机房',
+  small: '小机房',
+};

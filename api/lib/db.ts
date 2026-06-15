@@ -11,6 +11,8 @@ import type {
   NotificationPriority,
   PaymentRecord,
   PaymentStatus,
+  ElevatorBrand,
+  ElevatorPlan,
 } from '../../shared/types.js';
 import {
   generateHouseholds,
@@ -30,6 +32,8 @@ class DataStore {
   private dailyReports: Map<string, ConstructionDailyReport[]> = new Map();
   private paymentRecords: Map<string, PaymentRecord[]> = new Map();
   private notifications: Notification[] = [];
+  private elevatorBrands: ElevatorBrand[] = [];
+  private elevatorPlans: ElevatorPlan[] = [];
 
   constructor() {
     this.seedMockData();
@@ -437,7 +441,177 @@ class DataStore {
       }
     }
 
+    this.seedMockElevatorData(isoNow);
     this.seedMockNotifications(isoNow);
+  }
+
+  private seedMockElevatorData(isoNow: string) {
+    const brands: ElevatorBrand[] = [
+      {
+        id: genId('brand'),
+        name: '康力电梯',
+        country: '中国',
+        description: '国内知名电梯品牌，专注于电梯研发、制造、销售、安装和维保服务',
+        isActive: true,
+        createdAt: isoNow,
+        updatedAt: isoNow,
+      },
+      {
+        id: genId('brand'),
+        name: '三菱电梯',
+        country: '日本',
+        description: '全球知名电梯品牌，以高品质和可靠性著称',
+        isActive: true,
+        createdAt: isoNow,
+        updatedAt: isoNow,
+      },
+      {
+        id: genId('brand'),
+        name: '日立电梯',
+        country: '日本',
+        description: '世界500强企业，电梯业务覆盖全球',
+        isActive: true,
+        createdAt: isoNow,
+        updatedAt: isoNow,
+      },
+      {
+        id: genId('brand'),
+        name: '迅达电梯',
+        country: '瑞士',
+        description: '全球领先的电梯、自动扶梯和自动人行道供应商',
+        isActive: true,
+        createdAt: isoNow,
+        updatedAt: isoNow,
+      },
+      {
+        id: genId('brand'),
+        name: '江南嘉捷',
+        country: '中国',
+        description: '国内电梯行业重点骨干企业，产品性价比高',
+        isActive: true,
+        createdAt: isoNow,
+        updatedAt: isoNow,
+      },
+    ];
+    this.elevatorBrands = brands;
+
+    const plans: ElevatorPlan[] = [
+      {
+        id: genId('plan'),
+        brandId: brands[0].id,
+        name: '标准型钢结构外挂电梯',
+        loadCapacity: 630,
+        passengerCount: 8,
+        speed: 1.0,
+        structureType: 'steel',
+        driveType: 'traction',
+        machineRoomType: 'small',
+        basePrice: 420000,
+        constructionDays: 90,
+        warrantyYears: 2,
+        description: '性价比高的标准方案，适合6层及以下住宅',
+        features: ['曳引式驱动', '小机房设计', '钢结构井道', '标配空调通风', '停电应急平层'],
+        isActive: true,
+        createdAt: isoNow,
+        updatedAt: isoNow,
+      },
+      {
+        id: genId('plan'),
+        brandId: brands[0].id,
+        name: '观光型玻璃幕墙电梯',
+        loadCapacity: 800,
+        passengerCount: 10,
+        speed: 1.0,
+        structureType: 'glass',
+        driveType: 'traction',
+        machineRoomType: 'without',
+        basePrice: 580000,
+        constructionDays: 120,
+        warrantyYears: 2,
+        description: '全景观光电梯，提升建筑外观品质',
+        features: ['无机房设计', '玻璃幕墙井道', '观光轿厢', 'LED氛围灯', '低噪音运行'],
+        isActive: true,
+        createdAt: isoNow,
+        updatedAt: isoNow,
+      },
+      {
+        id: genId('plan'),
+        brandId: brands[1].id,
+        name: '豪华型混凝土井道电梯',
+        loadCapacity: 800,
+        passengerCount: 10,
+        speed: 1.5,
+        structureType: 'concrete',
+        driveType: 'traction',
+        machineRoomType: 'with',
+        basePrice: 680000,
+        constructionDays: 150,
+        warrantyYears: 3,
+        description: '高端配置，适合中高档小区',
+        features: ['永磁同步曳引机', 'VVVF变频调速', '智能门禁系统', '轿厢装潢可选', '远程监控系统'],
+        isActive: true,
+        createdAt: isoNow,
+        updatedAt: isoNow,
+      },
+      {
+        id: genId('plan'),
+        brandId: brands[2].id,
+        name: '高效节能型电梯',
+        loadCapacity: 1000,
+        passengerCount: 13,
+        speed: 1.6,
+        structureType: 'hybrid',
+        driveType: 'traction',
+        machineRoomType: 'without',
+        basePrice: 720000,
+        constructionDays: 140,
+        warrantyYears: 3,
+        description: '大容量高效节能，适合高层住宅',
+        features: ['能量回馈技术', '无机房设计', '智能群控系统', 'LED节能照明', '故障自诊断'],
+        isActive: true,
+        createdAt: isoNow,
+        updatedAt: isoNow,
+      },
+      {
+        id: genId('plan'),
+        brandId: brands[3].id,
+        name: '螺杆式家用电梯',
+        loadCapacity: 400,
+        passengerCount: 5,
+        speed: 0.15,
+        structureType: 'steel',
+        driveType: 'screw',
+        machineRoomType: 'without',
+        basePrice: 350000,
+        constructionDays: 60,
+        warrantyYears: 2,
+        description: '适合低层建筑，安装便捷',
+        features: ['螺杆式驱动', '无机房无底坑', '安装周期短', '安全可靠', '运行平稳'],
+        isActive: true,
+        createdAt: isoNow,
+        updatedAt: isoNow,
+      },
+      {
+        id: genId('plan'),
+        brandId: brands[4].id,
+        name: '经济实用型电梯',
+        loadCapacity: 630,
+        passengerCount: 8,
+        speed: 1.0,
+        structureType: 'steel',
+        driveType: 'traction',
+        machineRoomType: 'with',
+        basePrice: 380000,
+        constructionDays: 100,
+        warrantyYears: 1,
+        description: '经济实惠，满足基本使用需求',
+        features: ['曳引式驱动', '有机房设计', '钢结构井道', '基本配置', '性价比高'],
+        isActive: true,
+        createdAt: isoNow,
+        updatedAt: isoNow,
+      },
+    ];
+    this.elevatorPlans = plans;
   }
 
   private seedMockNotifications(isoNow: string) {
@@ -878,6 +1052,95 @@ class DataStore {
     });
     this.paymentRecords.set(proposalId, records);
     return records;
+  }
+
+  getElevatorBrands(params?: { activeOnly?: boolean }): ElevatorBrand[] {
+    let list = [...this.elevatorBrands];
+    if (params?.activeOnly) {
+      list = list.filter((b) => b.isActive);
+    }
+    return list.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
+  getElevatorBrand(id: string): ElevatorBrand | undefined {
+    return this.elevatorBrands.find((b) => b.id === id);
+  }
+
+  createElevatorBrand(data: Omit<ElevatorBrand, 'id' | 'createdAt' | 'updatedAt'>): ElevatorBrand {
+    const now = new Date().toISOString();
+    const brand: ElevatorBrand = {
+      ...data,
+      id: genId('brand'),
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.elevatorBrands.push(brand);
+    return brand;
+  }
+
+  updateElevatorBrand(id: string, patch: Partial<Omit<ElevatorBrand, 'id' | 'createdAt'>>): ElevatorBrand | undefined {
+    const brand = this.elevatorBrands.find((b) => b.id === id);
+    if (!brand) return undefined;
+    Object.assign(brand, patch, { updatedAt: new Date().toISOString() });
+    return brand;
+  }
+
+  deleteElevatorBrand(id: string): boolean {
+    const idx = this.elevatorBrands.findIndex((b) => b.id === id);
+    if (idx === -1) return false;
+    const hasPlans = this.elevatorPlans.some((p) => p.brandId === id);
+    if (hasPlans) return false;
+    this.elevatorBrands.splice(idx, 1);
+    return true;
+  }
+
+  getElevatorPlans(params?: { brandId?: string; activeOnly?: boolean }): Array<ElevatorPlan & { brandName: string }> {
+    let list = [...this.elevatorPlans];
+    if (params?.brandId) {
+      list = list.filter((p) => p.brandId === params.brandId);
+    }
+    if (params?.activeOnly) {
+      list = list.filter((p) => p.isActive);
+    }
+    return list
+      .map((p) => {
+        const brand = this.elevatorBrands.find((b) => b.id === p.brandId);
+        return { ...p, brandName: brand?.name || '未知品牌' };
+      })
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
+  getElevatorPlan(id: string): (ElevatorPlan & { brandName: string }) | undefined {
+    const plan = this.elevatorPlans.find((p) => p.id === id);
+    if (!plan) return undefined;
+    const brand = this.elevatorBrands.find((b) => b.id === plan.brandId);
+    return { ...plan, brandName: brand?.name || '未知品牌' };
+  }
+
+  createElevatorPlan(data: Omit<ElevatorPlan, 'id' | 'createdAt' | 'updatedAt'>): ElevatorPlan {
+    const now = new Date().toISOString();
+    const plan: ElevatorPlan = {
+      ...data,
+      id: genId('plan'),
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.elevatorPlans.push(plan);
+    return plan;
+  }
+
+  updateElevatorPlan(id: string, patch: Partial<Omit<ElevatorPlan, 'id' | 'createdAt'>>): ElevatorPlan | undefined {
+    const plan = this.elevatorPlans.find((p) => p.id === id);
+    if (!plan) return undefined;
+    Object.assign(plan, patch, { updatedAt: new Date().toISOString() });
+    return plan;
+  }
+
+  deleteElevatorPlan(id: string): boolean {
+    const idx = this.elevatorPlans.findIndex((p) => p.id === id);
+    if (idx === -1) return false;
+    this.elevatorPlans.splice(idx, 1);
+    return true;
   }
 }
 

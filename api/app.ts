@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import db from './lib/db.js';
 import { calcFloorCoefficient } from '../shared/calculator.js';
-import type { VoteOption, Proposal, ProgressNodeStatus, ConstructionDailyReport, NotificationType, NotificationPriority, AppealStatus, PaymentStatus } from '../shared/types.js';
+import type { VoteOption, Proposal, ProgressNodeStatus, ConstructionDailyReport, NotificationType, NotificationPriority, AppealStatus, PaymentStatus, ElevatorBrand, ElevatorPlan } from '../shared/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -474,6 +474,123 @@ app.post('/api/notifications/read-all', (req, res) => {
   if (!householdId) return fail(res, '缺少householdId');
   const count = db.markAllAsRead(householdId, proposalId);
   ok(res, { count, message: `已标记${count}条为已读` });
+});
+
+app.get('/api/elevator/brands', (req, res) => {
+  const activeOnly = req.query.activeOnly === 'true';
+  const list = db.getElevatorBrands({ activeOnly });
+  ok(res, list);
+});
+
+app.get('/api/elevator/brands/:id', (req, res) => {
+  const brand = db.getElevatorBrand(req.params.id);
+  if (!brand) return fail(res, '品牌不存在', 404);
+  ok(res, brand);
+});
+
+app.post('/api/elevator/brands', (req, res) => {
+  const body = req.body as Partial<ElevatorBrand>;
+  if (!body.name || !body.country) {
+    return fail(res, '缺少必填字段：品牌名称、国家');
+  }
+  const brand = db.createElevatorBrand({
+    name: body.name,
+    country: body.country,
+    description: body.description || '',
+    logoUrl: body.logoUrl || '',
+    isActive: body.isActive !== false,
+  });
+  ok(res, brand);
+});
+
+app.put('/api/elevator/brands/:id', (req, res) => {
+  const body = req.body as Partial<ElevatorBrand>;
+  const updated = db.updateElevatorBrand(req.params.id, body);
+  if (!updated) return fail(res, '品牌不存在', 404);
+  ok(res, updated);
+});
+
+app.delete('/api/elevator/brands/:id', (req, res) => {
+  const success = db.deleteElevatorBrand(req.params.id);
+  if (!success) return fail(res, '品牌不存在或存在关联方案，无法删除', 400);
+  ok(res, { message: '删除成功' });
+});
+
+app.get('/api/elevator/plans', (req, res) => {
+  const brandId = typeof req.query.brandId === 'string' ? req.query.brandId : undefined;
+  const activeOnly = req.query.activeOnly === 'true';
+  const list = db.getElevatorPlans({ brandId, activeOnly });
+  ok(res, list);
+});
+
+app.get('/api/elevator/plans/:id', (req, res) => {
+  const plan = db.getElevatorPlan(req.params.id);
+  if (!plan) return fail(res, '方案不存在', 404);
+  ok(res, plan);
+});
+
+app.post('/api/elevator/plans', (req, res) => {
+  const body = req.body as Partial<ElevatorPlan>;
+  if (
+    !body.brandId ||
+    !body.name ||
+    body.loadCapacity == null ||
+    body.passengerCount == null ||
+    body.speed == null ||
+    !body.structureType ||
+    !body.driveType ||
+    !body.machineRoomType ||
+    body.basePrice == null ||
+    body.constructionDays == null ||
+    body.warrantyYears == null
+  ) {
+    return fail(res, '缺少必填字段');
+  }
+  const plan = db.createElevatorPlan({
+    brandId: body.brandId,
+    name: body.name,
+    loadCapacity: +body.loadCapacity,
+    passengerCount: +body.passengerCount,
+    speed: +body.speed,
+    structureType: body.structureType,
+    driveType: body.driveType,
+    machineRoomType: body.machineRoomType,
+    basePrice: +body.basePrice,
+    constructionDays: +body.constructionDays,
+    warrantyYears: +body.warrantyYears,
+    description: body.description || '',
+    features: body.features || [],
+    isActive: body.isActive !== false,
+  });
+  ok(res, plan);
+});
+
+app.put('/api/elevator/plans/:id', (req, res) => {
+  const body = req.body as Partial<ElevatorPlan>;
+  const patch: Partial<ElevatorPlan> = {};
+  if (body.brandId !== undefined) patch.brandId = body.brandId;
+  if (body.name !== undefined) patch.name = body.name;
+  if (body.loadCapacity !== undefined) patch.loadCapacity = +body.loadCapacity;
+  if (body.passengerCount !== undefined) patch.passengerCount = +body.passengerCount;
+  if (body.speed !== undefined) patch.speed = +body.speed;
+  if (body.structureType !== undefined) patch.structureType = body.structureType;
+  if (body.driveType !== undefined) patch.driveType = body.driveType;
+  if (body.machineRoomType !== undefined) patch.machineRoomType = body.machineRoomType;
+  if (body.basePrice !== undefined) patch.basePrice = +body.basePrice;
+  if (body.constructionDays !== undefined) patch.constructionDays = +body.constructionDays;
+  if (body.warrantyYears !== undefined) patch.warrantyYears = +body.warrantyYears;
+  if (body.description !== undefined) patch.description = body.description;
+  if (body.features !== undefined) patch.features = body.features;
+  if (body.isActive !== undefined) patch.isActive = body.isActive;
+  const updated = db.updateElevatorPlan(req.params.id, patch);
+  if (!updated) return fail(res, '方案不存在', 404);
+  ok(res, updated);
+});
+
+app.delete('/api/elevator/plans/:id', (req, res) => {
+  const success = db.deleteElevatorPlan(req.params.id);
+  if (!success) return fail(res, '方案不存在', 404);
+  ok(res, { message: '删除成功' });
 });
 
 app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
