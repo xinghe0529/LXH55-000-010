@@ -75,6 +75,9 @@ export default function VotePanelPage() {
   const [appealLoading, setAppealLoading] = useState(false);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [partialAmount, setPartialAmount] = useState<string>('');
 
   useEffect(() => {
     if (!id) return;
@@ -210,11 +213,11 @@ export default function VotePanelPage() {
     }
   };
 
-  const handleUpdatePayment = async (paymentId: string, newStatus: PaymentStatus) => {
+  const handleUpdatePayment = async (paymentId: string, newStatus: PaymentStatus, paidAmount?: number) => {
     if (!id) return;
     setPaymentLoading(true);
     try {
-      const updated = await api.updatePaymentStatus(id, paymentId, { status: newStatus });
+      const updated = await api.updatePaymentStatus(id, paymentId, { status: newStatus, paidAmount });
       setPayments((prev) => prev.map((p) => (p.id === paymentId ? updated : p)));
       showToast('缴费状态已更新', 'success');
     } catch (e) {
@@ -222,6 +225,33 @@ export default function VotePanelPage() {
     } finally {
       setPaymentLoading(false);
     }
+  };
+
+  const handleMarkPartialClick = (paymentId: string) => {
+    const payment = payments.find((p) => p.id === paymentId);
+    if (!payment) return;
+    const defaultAmount = Math.round(payment.requiredAmount * 0.5);
+    setPartialAmount(String(defaultAmount));
+    setEditingPaymentId(paymentId);
+    setShowPaymentModal(true);
+  };
+
+  const handleConfirmPartialPayment = async () => {
+    if (!editingPaymentId) return;
+    const amount = Number(partialAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast('请输入有效的金额', 'error');
+      return;
+    }
+    const payment = payments.find((p) => p.id === editingPaymentId);
+    if (payment && amount >= payment.requiredAmount) {
+      await handleUpdatePayment(editingPaymentId, 'paid', payment.requiredAmount);
+    } else {
+      await handleUpdatePayment(editingPaymentId, 'partial', amount);
+    }
+    setShowPaymentModal(false);
+    setEditingPaymentId(null);
+    setPartialAmount('');
   };
 
   const votePercentages = useMemo(() => {
@@ -633,14 +663,26 @@ export default function VotePanelPage() {
                             </td>
                             <td className="px-5 py-3 text-center">
                               {pr.status !== 'paid' ? (
-                                <button
-                                  onClick={() => handleUpdatePayment(pr.id, pr.status === 'unpaid' ? 'partial' : 'paid')}
-                                  disabled={paymentLoading}
-                                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50"
-                                >
-                                  <Check className="w-3 h-3" />
-                                  {pr.status === 'unpaid' ? '标记部分缴费' : '标记已缴清'}
-                                </button>
+                                <div className="flex items-center justify-center gap-2">
+                                  {pr.status === 'unpaid' && (
+                                    <button
+                                      onClick={() => handleMarkPartialClick(pr.id)}
+                                      disabled={paymentLoading}
+                                      className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-yellow-50 text-yellow-700 hover:bg-yellow-100 border border-yellow-200 transition-colors disabled:opacity-50"
+                                    >
+                                      <Clock className="w-3 h-3" />
+                                      部分缴费
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleUpdatePayment(pr.id, 'paid', pr.requiredAmount)}
+                                    disabled={paymentLoading}
+                                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                    {pr.status === 'unpaid' ? '标记已缴清' : '确认已缴清'}
+                                  </button>
+                                </div>
                               ) : (
                                 <span className="text-xs text-slate-400 flex items-center justify-center gap-1">
                                   <CheckCircle2 className="w-3.5 h-3.5 text-success-500" />
@@ -1105,6 +1147,142 @@ export default function VotePanelPage() {
           </div>
         </div>
       </div>
+
+      {showPaymentModal && editingPaymentId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-slide-up">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-yellow-100 to-yellow-200 flex items-center justify-center">
+                  <Wallet className="w-4 h-4 text-yellow-700" />
+                </div>
+                <h3 className="font-display font-bold text-lg text-slate-800">登记部分缴费</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setEditingPaymentId(null);
+                  setPartialAmount('');
+                }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {(() => {
+                const payment = payments.find((p) => p.id === editingPaymentId);
+                const hh = payment ? households.find((h) => h.id === payment.householdId) : null;
+                const amount = Number(partialAmount);
+                const remaining = payment ? payment.requiredAmount - amount : 0;
+                return (
+                  <>
+                    {hh && payment && (
+                      <div className="p-4 rounded-xl bg-gradient-to-br from-primary-50 to-accent-50 border border-primary-100">
+                        <div className="text-xs font-medium text-primary-600 mb-1">住户信息</div>
+                        <div className="font-bold text-primary-900">
+                          {hh.unit}单元 {hh.floor}层 {hh.roomNumber}
+                        </div>
+                        <div className="text-sm text-slate-600 mt-1">
+                          应缴金额：<span className="font-semibold text-slate-800">{formatCurrency(payment.requiredAmount)}</span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="label-base">本次缴费金额</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium">¥</span>
+                        <input
+                          type="number"
+                          value={partialAmount}
+                          onChange={(e) => setPartialAmount(e.target.value)}
+                          placeholder="请输入缴费金额"
+                          className="input-base pl-7 pr-4"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        {[30, 50, 70, 100].map((percent) => {
+                          if (!payment) return null;
+                          const quickAmount = Math.round(payment.requiredAmount * percent / 100);
+                          return (
+                            <button
+                              key={percent}
+                              onClick={() => setPartialAmount(String(quickAmount))}
+                              className={cn(
+                                'px-2 py-1 rounded text-xs font-medium transition-colors',
+                                amount === quickAmount
+                                  ? 'bg-primary-100 text-primary-700 border border-primary-200'
+                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-transparent'
+                              )}
+                            >
+                              {percent}%
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {payment && amount > 0 && (
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm">
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-slate-500">应缴总额</span>
+                          <span className="font-medium text-slate-800">{formatCurrency(payment.requiredAmount)}</span>
+                        </div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-slate-500">本次缴纳</span>
+                          <span className="font-semibold text-emerald-700">{formatCurrency(amount)}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-1.5 border-t border-slate-200">
+                          <span className="text-slate-500">剩余待缴</span>
+                          <span className={cn(
+                            'font-semibold',
+                            remaining <= 0 ? 'text-success-600' : 'text-danger-600'
+                          )}>
+                            {remaining <= 0 ? '已缴清' : formatCurrency(remaining)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowPaymentModal(false);
+                  setEditingPaymentId(null);
+                  setPartialAmount('');
+                }}
+                className="btn-ghost"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmPartialPayment}
+                disabled={paymentLoading || !partialAmount || Number(partialAmount) <= 0}
+                className="btn-primary"
+              >
+                {paymentLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    提交中...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    确认登记
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
