@@ -21,6 +21,8 @@ import {
   ArrowRight,
   Plus,
   Cloud,
+  Wallet,
+  AlertTriangle,
 } from 'lucide-react';
 import { useUIStore } from '../store/ui';
 import api from '../lib/apiClient';
@@ -29,11 +31,15 @@ import {
   STATUS_COLORS,
   STATUS_LABELS,
   FINANCE_CATEGORIES,
+  PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUS_COLORS,
   type Proposal,
   type ProgressNode,
   type FinanceRecord,
   type VoteResult,
   type ConstructionDailyReport,
+  type PaymentRecord,
+  type PaymentStatus,
 } from '../../shared/types';
 import { formatCurrency } from '../../shared/calculator';
 
@@ -205,8 +211,19 @@ function TimelineNode({ node, reportCount }: { node: ProgressNode; reportCount?:
 
 function FinanceSummaryCard({
   summary,
+  paymentSummary,
 }: {
   summary: { budget: number; actual: number };
+  paymentSummary?: {
+    totalRequired: number;
+    totalPaid: number;
+    totalUnpaid: number;
+    collectionRate: number;
+    unpaidCount: number;
+    partialCount: number;
+    paidCount: number;
+    totalHouseholds: number;
+  } | null;
 }) {
   const remaining = summary.budget - summary.actual;
   const progress = summary.budget > 0 ? Math.min(100, (summary.actual / summary.budget) * 100) : 0;
@@ -271,6 +288,71 @@ function FinanceSummaryCard({
             <span>100%</span>
           </div>
         </div>
+
+        {paymentSummary && paymentSummary.totalHouseholds > 0 && (
+          <div className="mt-5 pt-5 border-t border-slate-200/60">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-sm">
+                <Wallet className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-slate-800">资金收缴概况</div>
+                <div className="text-[11px] text-slate-500">按户缴费追踪汇总</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-center">
+                <div className="text-[11px] font-medium text-emerald-600">收缴率</div>
+                <div className="text-xl font-display font-black text-emerald-700 mt-0.5">
+                  {paymentSummary.collectionRate.toFixed(1)}%
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-primary-50 border border-primary-100 text-center">
+                <div className="text-[11px] font-medium text-primary-600">已缴清</div>
+                <div className="text-xl font-display font-black text-primary-700 mt-0.5">
+                  {paymentSummary.paidCount}
+                  <span className="text-xs text-slate-400 font-normal">/{paymentSummary.totalHouseholds}户</span>
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-yellow-50 border border-yellow-100 text-center">
+                <div className="text-[11px] font-medium text-yellow-600">部分缴费</div>
+                <div className="text-xl font-display font-black text-yellow-700 mt-0.5">
+                  {paymentSummary.partialCount}户
+                </div>
+              </div>
+              <div className="p-3 rounded-xl bg-danger-50 border border-danger-100 text-center">
+                <div className="text-[11px] font-medium text-danger-600">未缴费</div>
+                <div className="text-xl font-display font-black text-danger-700 mt-0.5">
+                  {paymentSummary.unpaidCount}户
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-700"
+                    style={{ width: `${paymentSummary.collectionRate}%` }}
+                  />
+                </div>
+              </div>
+              <div className="text-xs font-bold text-emerald-700 whitespace-nowrap">
+                {formatCurrency(paymentSummary.totalPaid)} / {formatCurrency(paymentSummary.totalRequired)}
+              </div>
+            </div>
+
+            {paymentSummary.unpaidCount + paymentSummary.partialCount > 0 && (
+              <div className="mt-3 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-danger-50 border border-danger-100">
+                <AlertTriangle className="w-3.5 h-3.5 text-danger-500 flex-shrink-0" />
+                <span className="text-xs text-danger-700 font-medium">
+                  欠缴户数：{paymentSummary.unpaidCount + paymentSummary.partialCount}户，待缴金额：{formatCurrency(paymentSummary.totalUnpaid)}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -289,6 +371,16 @@ export default function ProgressBoardPage() {
   } | null>(null);
   const [voteResult, setVoteResult] = useState<VoteResult | null>(null);
   const [dailyReports, setDailyReports] = useState<ConstructionDailyReport[]>([]);
+  const [paymentSummary, setPaymentSummary] = useState<{
+    totalRequired: number;
+    totalPaid: number;
+    totalUnpaid: number;
+    collectionRate: number;
+    unpaidCount: number;
+    partialCount: number;
+    paidCount: number;
+    totalHouseholds: number;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('all');
 
   useEffect(() => {
@@ -298,12 +390,13 @@ export default function ProgressBoardPage() {
     (async () => {
       setLoading(true);
       try {
-        const [p, prog, fin, vr, reports] = await Promise.all([
+        const [p, prog, fin, vr, reports, pay] = await Promise.all([
           api.getProposal(id),
           api.getProgress(id),
           api.getFinances(id),
           api.getVoteResult(id).catch(() => null),
           api.getDailyReports(id).catch(() => []),
+          api.getPayments(id).catch(() => ({ records: [], summary: null })),
         ]);
         if (!alive) return;
         setProposal(p);
@@ -311,6 +404,7 @@ export default function ProgressBoardPage() {
         setFinances(fin);
         setVoteResult(vr);
         setDailyReports(reports);
+        setPaymentSummary(pay.summary);
       } catch (e) {
         showToast((e as Error).message, 'error');
       } finally {
@@ -760,7 +854,7 @@ export default function ProgressBoardPage() {
           </div>
 
           <div className="lg:col-span-3 space-y-6">
-            {finances && <FinanceSummaryCard summary={finances.summary} />}
+            {finances && <FinanceSummaryCard summary={finances.summary} paymentSummary={paymentSummary} />}
 
             <div className="card grain-overlay overflow-hidden">
               <div className="p-6 pb-4 border-b border-slate-100">

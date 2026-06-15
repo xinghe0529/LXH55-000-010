@@ -12,6 +12,8 @@ import type {
   ProgressNodeStatus,
   ConstructionDailyReport,
   Notification,
+  PaymentRecord,
+  PaymentStatus,
 } from '../../shared/types';
 
 type ApiResponse<T> = { success: true; data: T } | { success: false; error: string };
@@ -144,6 +146,24 @@ export const api = {
     post<{ message: string }>(`/api/notifications/${notificationId}/read`, { householdId }),
   markAllNotificationsRead: (householdId: string, proposalId?: string) =>
     post<{ count: number; message: string }>('/api/notifications/read-all', { householdId, proposalId }),
+  getPayments: (id: string) =>
+    get<{
+      records: PaymentRecord[];
+      summary: {
+        totalRequired: number;
+        totalPaid: number;
+        totalUnpaid: number;
+        collectionRate: number;
+        unpaidCount: number;
+        partialCount: number;
+        paidCount: number;
+        totalHouseholds: number;
+      };
+    }>(`/api/proposals/${id}/payments`),
+  updatePaymentStatus: (proposalId: string, paymentId: string, patch: { status?: PaymentStatus; paidAmount?: number; remark?: string }) =>
+    put<PaymentRecord>(`/api/proposals/${proposalId}/payments/${paymentId}`, patch),
+  initPayments: (proposalId: string) =>
+    post<PaymentRecord[]>(`/api/proposals/${proposalId}/payments/init`, {}),
 };
 
 export default api;

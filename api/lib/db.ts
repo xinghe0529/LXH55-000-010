@@ -9,6 +9,8 @@ import type {
   Notification,
   NotificationType,
   NotificationPriority,
+  PaymentRecord,
+  PaymentStatus,
 } from '../../shared/types.js';
 import {
   generateHouseholds,
@@ -26,6 +28,7 @@ class DataStore {
   private progressNodes: Map<string, ProgressNode[]> = new Map();
   private financeRecords: Map<string, FinanceRecord[]> = new Map();
   private dailyReports: Map<string, ConstructionDailyReport[]> = new Map();
+  private paymentRecords: Map<string, PaymentRecord[]> = new Map();
   private notifications: Notification[] = [];
 
   constructor() {
@@ -395,6 +398,42 @@ class DataStore {
         this.dailyReports.set(p.id, seedReports);
       } else {
         this.dailyReports.set(p.id, []);
+      }
+
+      if (p.status === 'construction' || p.status === 'completed') {
+        const feeData = this.getFeeEstimate(p.id);
+        const hh = this.households.get(p.id) || [];
+        const payments: PaymentRecord[] = hh.map((h, idx) => {
+          const feeItem = feeData?.items.find((i) => i.householdId === h.id);
+          const required = feeItem ? Math.round(feeItem.estimatedFee) : 0;
+          let status: PaymentStatus = 'unpaid';
+          let paidAmount = 0;
+          let paidAt: string | undefined;
+          if (p.status === 'completed') {
+            status = 'paid';
+            paidAmount = required;
+            paidAt = daysAgo(Math.floor(Math.random() * 30) + 5);
+          } else if (idx < hh.length * 0.4) {
+            status = 'paid';
+            paidAmount = required;
+            paidAt = daysAgo(Math.floor(Math.random() * 15) + 1);
+          } else if (idx < hh.length * 0.65) {
+            status = 'partial';
+            paidAmount = Math.round(required * (0.3 + Math.random() * 0.4));
+          }
+          return {
+            id: genId('pay'),
+            proposalId: p.id,
+            householdId: h.id,
+            requiredAmount: required,
+            paidAmount,
+            status,
+            paidAt,
+          };
+        });
+        this.paymentRecords.set(p.id, payments);
+      } else {
+        this.paymentRecords.set(p.id, []);
       }
     }
 
@@ -766,6 +805,79 @@ class DataStore {
     list.splice(idx, 1);
     this.dailyReports.set(proposalId, list);
     return true;
+  }
+
+  getPaymentRecords(proposalId: string): PaymentRecord[] {
+    return this.paymentRecords.get(proposalId) || [];
+  }
+
+  getPaymentSummary(proposalId: string): {
+    totalRequired: number;
+    totalPaid: number;
+    totalUnpaid: number;
+    collectionRate: number;
+    unpaidCount: number;
+    partialCount: number;
+    paidCount: number;
+    totalHouseholds: number;
+  } {
+    const records = this.getPaymentRecords(proposalId);
+    const totalRequired = records.reduce((s, r) => s + r.requiredAmount, 0);
+    const totalPaid = records.reduce((s, r) => s + r.paidAmount, 0);
+    const totalUnpaid = totalRequired - totalPaid;
+    const collectionRate = totalRequired > 0 ? (totalPaid / totalRequired) * 100 : 0;
+    const unpaidCount = records.filter((r) => r.status === 'unpaid').length;
+    const partialCount = records.filter((r) => r.status === 'partial').length;
+    const paidCount = records.filter((r) => r.status === 'paid').length;
+    return {
+      totalRequired,
+      totalPaid,
+      totalUnpaid,
+      collectionRate,
+      unpaidCount,
+      partialCount,
+      paidCount,
+      totalHouseholds: records.length,
+    };
+  }
+
+  updatePaymentStatus(
+    proposalId: string,
+    paymentId: string,
+    patch: { status?: PaymentStatus; paidAmount?: number; remark?: string }
+  ): PaymentRecord | undefined {
+    const list = this.paymentRecords.get(proposalId);
+    if (!list) return undefined;
+    const r = list.find((x) => x.id === paymentId);
+    if (!r) return undefined;
+    if (patch.status !== undefined) r.status = patch.status;
+    if (patch.paidAmount !== undefined) r.paidAmount = patch.paidAmount;
+    if (patch.remark !== undefined) r.remark = patch.remark;
+    if (patch.status === 'paid') {
+      r.paidAmount = r.requiredAmount;
+      r.paidAt = new Date().toISOString();
+    }
+    return r;
+  }
+
+  initPaymentRecords(proposalId: string): PaymentRecord[] {
+    const existing = this.paymentRecords.get(proposalId);
+    if (existing && existing.length > 0) return existing;
+    const feeData = this.getFeeEstimate(proposalId);
+    const hh = this.households.get(proposalId) || [];
+    const records: PaymentRecord[] = hh.map((h) => {
+      const feeItem = feeData?.items.find((i) => i.householdId === h.id);
+      return {
+        id: genId('pay'),
+        proposalId,
+        householdId: h.id,
+        requiredAmount: feeItem ? Math.round(feeItem.estimatedFee) : 0,
+        paidAmount: 0,
+        status: 'unpaid' as PaymentStatus,
+      };
+    });
+    this.paymentRecords.set(proposalId, records);
+    return records;
   }
 }
 

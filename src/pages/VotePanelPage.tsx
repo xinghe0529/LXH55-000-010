@@ -22,6 +22,7 @@ import {
   Info,
   ChevronDown,
   MessageSquare,
+  Wallet,
 } from 'lucide-react';
 import { useUIStore } from '../store/ui';
 import api from '../lib/apiClient';
@@ -31,6 +32,8 @@ import {
   VOTE_LABELS,
   APPEAL_STATUS_LABELS,
   APPEAL_STATUS_COLORS,
+  PAYMENT_STATUS_LABELS,
+  PAYMENT_STATUS_COLORS,
   type Proposal,
   type Household,
   type FeeEstimateItem,
@@ -38,6 +41,8 @@ import {
   type VoteRecord,
   type VoteOption,
   type Appeal,
+  type PaymentRecord,
+  type PaymentStatus,
 } from '../../shared/types';
 import { formatCurrency, calcFloorCoefficient } from '../../shared/calculator';
 import { cn } from '../lib/utils';
@@ -68,6 +73,8 @@ export default function VotePanelPage() {
   const [selectedVoteOption, setSelectedVoteOption] = useState<VoteOption | null>(null);
   const [appealReason, setAppealReason] = useState('');
   const [appealLoading, setAppealLoading] = useState(false);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -75,12 +82,13 @@ export default function VotePanelPage() {
     (async () => {
       setLoading(true);
       try {
-        const [p, h, f, v, a] = await Promise.all([
+        const [p, h, f, v, a, pay] = await Promise.all([
           api.getProposal(id),
           api.getHouseholds(id),
           api.getFeeEstimate(id),
           api.getVoteResult(id),
           api.getAppeals(id),
+          api.getPayments(id).catch(() => ({ records: [], summary: { totalRequired: 0, totalPaid: 0, totalUnpaid: 0, collectionRate: 0, unpaidCount: 0, partialCount: 0, paidCount: 0, totalHouseholds: 0 } })),
         ]);
         if (!alive) return;
         setProposal(p);
@@ -88,6 +96,7 @@ export default function VotePanelPage() {
         setFeeEstimate(f);
         setVoteResult(v);
         setAppeals(a);
+        setPayments(pay.records);
       } catch (e) {
         showToast((e as Error).message, 'error');
       } finally {
@@ -201,6 +210,20 @@ export default function VotePanelPage() {
     }
   };
 
+  const handleUpdatePayment = async (paymentId: string, newStatus: PaymentStatus) => {
+    if (!id) return;
+    setPaymentLoading(true);
+    try {
+      const updated = await api.updatePaymentStatus(id, paymentId, { status: newStatus });
+      setPayments((prev) => prev.map((p) => (p.id === paymentId ? updated : p)));
+      showToast('缴费状态已更新', 'success');
+    } catch (e) {
+      showToast((e as Error).message, 'error');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   const votePercentages = useMemo(() => {
     if (!voteResult) return { agree: 0, disagree: 0, abstain: 0 };
     const total = voteResult.agreeCount + voteResult.disagreeCount + voteResult.abstainCount;
@@ -213,6 +236,18 @@ export default function VotePanelPage() {
   }, [voteResult]);
 
   const isVoting = proposal?.status === 'voting';
+
+  const paymentSummary = useMemo(() => {
+    if (payments.length === 0) return null;
+    const totalRequired = payments.reduce((s, r) => s + r.requiredAmount, 0);
+    const totalPaid = payments.reduce((s, r) => s + r.paidAmount, 0);
+    const totalUnpaid = totalRequired - totalPaid;
+    const collectionRate = totalRequired > 0 ? (totalPaid / totalRequired) * 100 : 0;
+    const unpaidCount = payments.filter((r) => r.status === 'unpaid').length;
+    const partialCount = payments.filter((r) => r.status === 'partial').length;
+    const paidCount = payments.filter((r) => r.status === 'paid').length;
+    return { totalRequired, totalPaid, totalUnpaid, collectionRate, unpaidCount, partialCount, paidCount, totalHouseholds: payments.length };
+  }, [payments]);
 
   if (loading) {
     return (
@@ -477,6 +512,150 @@ export default function VotePanelPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          <div className="card overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center">
+                  <Wallet className="w-4.5 h-4.5 text-emerald-700" />
+                </div>
+                <h2 className="section-title text-lg">按户资金缴纳追踪</h2>
+              </div>
+              {paymentSummary && (
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-slate-500">
+                    收缴率：<span className="font-bold text-emerald-700">{paymentSummary.collectionRate.toFixed(1)}%</span>
+                  </span>
+                  <span className="text-slate-500">
+                    欠缴：<span className="font-bold text-danger-600">{paymentSummary.unpaidCount + paymentSummary.partialCount}户</span>
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {payments.length === 0 ? (
+              <div className="py-12 text-center text-slate-500">
+                <Wallet className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                <p>暂无缴费记录</p>
+              </div>
+            ) : (
+              <>
+                {paymentSummary && (
+                  <div className="px-6 py-4 bg-gradient-to-r from-emerald-50 to-primary-50 border-b border-slate-100">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div className="text-center">
+                        <div className="text-xs font-medium text-slate-500">应缴总额</div>
+                        <div className="text-lg font-display font-black text-slate-800 mt-1">
+                          {formatCurrency(paymentSummary.totalRequired)}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs font-medium text-slate-500">已缴金额</div>
+                        <div className="text-lg font-display font-black text-success-700 mt-1">
+                          {formatCurrency(paymentSummary.totalPaid)}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs font-medium text-slate-500">待缴金额</div>
+                        <div className="text-lg font-display font-black text-danger-600 mt-1">
+                          {formatCurrency(paymentSummary.totalUnpaid)}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-xs font-medium text-slate-500">收缴进度</div>
+                        <div className="mt-2">
+                          <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 transition-all duration-700"
+                              style={{ width: `${paymentSummary.collectionRate}%` }}
+                            />
+                          </div>
+                          <div className="text-xs font-bold text-emerald-700 mt-1">
+                            {paymentSummary.paidCount}缴清 / {paymentSummary.partialCount}部分 / {paymentSummary.unpaidCount}未缴
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-slate-50 text-xs font-semibold text-slate-600">
+                        <th className="text-left px-5 py-3.5">单元</th>
+                        <th className="text-left px-5 py-3.5">楼层</th>
+                        <th className="text-left px-5 py-3.5">房号</th>
+                        <th className="text-right px-5 py-3.5">应缴金额</th>
+                        <th className="text-right px-5 py-3.5">已缴金额</th>
+                        <th className="text-right px-5 py-3.5">待缴金额</th>
+                        <th className="text-center px-5 py-3.5">缴费状态</th>
+                        <th className="text-center px-5 py-3.5">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {payments.map((pr) => {
+                        const hh = households.find((h) => h.id === pr.householdId);
+                        const unpaid = pr.requiredAmount - pr.paidAmount;
+                        const isSelected = selectedHousehold?.id === pr.householdId;
+                        return (
+                          <tr
+                            key={pr.id}
+                            className={cn(
+                              'text-sm transition-colors duration-200',
+                              isSelected
+                                ? 'bg-primary-50/80 border-l-4 border-l-primary-500'
+                                : 'hover:bg-slate-50/50'
+                            )}
+                          >
+                            <td className={cn('px-5 py-3', isSelected && 'font-semibold text-primary-900')}>
+                              {hh?.unit ?? '-'}
+                            </td>
+                            <td className={cn('px-5 py-3', isSelected && 'font-semibold text-primary-900')}>
+                              {hh?.floor ?? '-'}层
+                            </td>
+                            <td className={cn('px-5 py-3', isSelected && 'font-semibold text-primary-900')}>
+                              {hh?.roomNumber ?? '-'}
+                            </td>
+                            <td className={cn('px-5 py-3 text-right tabular-nums', isSelected && 'font-semibold text-primary-900')}>
+                              {formatCurrency(pr.requiredAmount)}
+                            </td>
+                            <td className={cn('px-5 py-3 text-right tabular-nums font-medium', pr.status === 'paid' ? 'text-success-700' : 'text-slate-700')}>
+                              {formatCurrency(pr.paidAmount)}
+                            </td>
+                            <td className={cn('px-5 py-3 text-right tabular-nums font-medium', unpaid > 0 ? 'text-danger-600' : 'text-slate-400')}>
+                              {formatCurrency(unpaid)}
+                            </td>
+                            <td className="px-5 py-3 text-center">
+                              <span className={cn('badge', PAYMENT_STATUS_COLORS[pr.status])}>
+                                {PAYMENT_STATUS_LABELS[pr.status]}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 text-center">
+                              {pr.status !== 'paid' ? (
+                                <button
+                                  onClick={() => handleUpdatePayment(pr.id, pr.status === 'unpaid' ? 'partial' : 'paid')}
+                                  disabled={paymentLoading}
+                                  className="inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50"
+                                >
+                                  <Check className="w-3 h-3" />
+                                  {pr.status === 'unpaid' ? '标记部分缴费' : '标记已缴清'}
+                                </button>
+                              ) : (
+                                <span className="text-xs text-slate-400 flex items-center justify-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-success-500" />
+                                  已完成
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="card p-6">

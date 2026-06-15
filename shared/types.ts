@@ -188,6 +188,31 @@ export interface ConstructionDailyReport {
 
 export const WEATHER_OPTIONS = ['晴', '多云', '阴', '小雨', '中雨', '大雨', '雷阵雨', '小雪', '中雪', '大雪', '雾', '霾'];
 
+export type PaymentStatus = 'unpaid' | 'partial' | 'paid';
+
+export interface PaymentRecord {
+  id: string;
+  proposalId: string;
+  householdId: string;
+  requiredAmount: number;
+  paidAmount: number;
+  status: PaymentStatus;
+  paidAt?: string;
+  remark?: string;
+}
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  unpaid: '未缴费',
+  partial: '部分缴费',
+  paid: '已缴清',
+};
+
+export const PAYMENT_STATUS_COLORS: Record<PaymentStatus, string> = {
+  unpaid: 'bg-danger-100 text-danger-700 border-danger-200',
+  partial: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+  paid: 'bg-success-100 text-success-700 border-success-200',
+};
+
 export type NotificationType = 'vote_result' | 'progress_node' | 'payment_reminder' | 'appeal_reply' | 'system';
 
 export type NotificationPriority = 'low' | 'medium' | 'high';

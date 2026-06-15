@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import db from './lib/db.js';
 import { calcFloorCoefficient } from '../shared/calculator.js';
-import type { VoteOption, Proposal, ProgressNodeStatus, ConstructionDailyReport, NotificationType, NotificationPriority, AppealStatus } from '../shared/types.js';
+import type { VoteOption, Proposal, ProgressNodeStatus, ConstructionDailyReport, NotificationType, NotificationPriority, AppealStatus, PaymentStatus } from '../shared/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -382,6 +382,35 @@ app.delete('/api/proposals/:id/daily-reports/:reportId', (req, res) => {
   const success = db.deleteDailyReport(req.params.id, req.params.reportId);
   if (!success) return fail(res, '日报不存在', 404);
   ok(res, { message: '删除成功' });
+});
+
+app.get('/api/proposals/:id/payments', (req, res) => {
+  const records = db.getPaymentRecords(req.params.id);
+  const summary = db.getPaymentSummary(req.params.id);
+  ok(res, { records, summary });
+});
+
+app.put('/api/proposals/:id/payments/:paymentId', (req, res) => {
+  const { status, paidAmount, remark } = req.body as {
+    status?: PaymentStatus;
+    paidAmount?: number;
+    remark?: string;
+  };
+  if (status && !['unpaid', 'partial', 'paid'].includes(status)) {
+    return fail(res, '状态参数不合法，必须为 unpaid/partial/paid');
+  }
+  const updated = db.updatePaymentStatus(req.params.id, req.params.paymentId, {
+    status,
+    paidAmount: paidAmount != null ? +paidAmount : undefined,
+    remark,
+  });
+  if (!updated) return fail(res, '缴费记录不存在', 404);
+  ok(res, updated);
+});
+
+app.post('/api/proposals/:id/payments/init', (_req, res) => {
+  const records = db.initPaymentRecords(_req.params.id);
+  ok(res, records);
 });
 
 function dispatchNotification(data: {
