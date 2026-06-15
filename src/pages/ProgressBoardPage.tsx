@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ChevronLeft,
   Calendar,
@@ -379,6 +379,7 @@ function FinanceSummaryCard({
 
 export default function ProgressBoardPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const showToast = useUIStore((s) => s.showToast);
 
   const [loading, setLoading] = useState(true);
@@ -900,7 +901,7 @@ export default function ProgressBoardPage() {
                     <div
                       key={issue.id}
                       className="p-3 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors cursor-pointer"
-                      onClick={() => window.location.href = '/issues'}
+                      onClick={() => navigate('/issues')}
                     >
                       <div className="flex items-start gap-2">
                         <span className={cn('badge !text-[10px] !px-1.5 !py-0.5 flex-shrink-0 mt-0.5', ISSUE_CATEGORY_COLORS[issue.category])}>
